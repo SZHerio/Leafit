@@ -5,6 +5,7 @@
 #include <QVariant>
 #include <QVariantMap>
 
+#include "library/librarymodel.h"
 #include "reader/readingdocumentformatter.h"
 #include "readercontroller.h"
 #include "storage/localstatestore.h"
@@ -20,15 +21,19 @@ int main(int argc, char *argv[])
     app.styleHints()->setWheelScrollLines(6);
 
     LocalStateStore localState;
+    LibraryModel libraryModel(&localState);
     ReaderController reader;
     ReadingDocumentFormatter documentFormatter;
 
     QObject::connect(&reader,
                      &ReaderController::documentOpened,
                      &localState,
-                     [&localState](const QUrl &sourceUrl) {
+                     [&localState, &reader](const QUrl &sourceUrl) {
                          if (!sourceUrl.isEmpty()) {
                              localState.setLastBookUrl(sourceUrl);
+                             localState.recordBookOpened(sourceUrl,
+                                                         reader.title(),
+                                                         reader.formatName());
                          }
                      });
     QObject::connect(&app, &QCoreApplication::aboutToQuit, &localState, &LocalStateStore::sync);
@@ -43,6 +48,8 @@ int main(int argc, char *argv[])
          QVariant::fromValue(static_cast<QObject *>(&reader))},
         {QStringLiteral("localStateStore"),
          QVariant::fromValue(static_cast<QObject *>(&localState))},
+        {QStringLiteral("libraryModel"),
+         QVariant::fromValue(static_cast<QObject *>(&libraryModel))},
         {QStringLiteral("readingDocumentFormatter"),
          QVariant::fromValue(static_cast<QObject *>(&documentFormatter))}
     });

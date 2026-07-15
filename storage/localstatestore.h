@@ -1,8 +1,11 @@
 #pragma once
 
+#include "../library/librarybook.h"
+
 #include <QObject>
 #include <QSettings>
 #include <QUrl>
+#include <QVector>
 
 class LocalStateStore final : public QObject
 {
@@ -33,8 +36,17 @@ public:
     Q_INVOKABLE int pdfPage(const QUrl &documentUrl) const;
     Q_INVOKABLE qreal pdfScale(const QUrl &documentUrl) const;
     Q_INVOKABLE void saveTextPosition(const QUrl &documentUrl, qreal progress);
-    Q_INVOKABLE void savePdfPosition(const QUrl &documentUrl, int page, qreal scale);
+    Q_INVOKABLE void savePdfPosition(const QUrl &documentUrl,
+                                     int page,
+                                     qreal scale,
+                                     qreal progress);
     Q_INVOKABLE void sync();
+
+    QVector<LibraryBook> libraryBooks() const;
+    void recordBookOpened(const QUrl &documentUrl,
+                          const QString &title,
+                          const QString &formatName);
+    void removeFromLibrary(const QUrl &documentUrl);
 
 signals:
     void darkModeChanged();
@@ -42,6 +54,8 @@ signals:
     void lineHeightChanged();
     void pageWidthChanged();
     void lastBookUrlChanged();
+    void libraryChanged();
+    void documentProgressChanged(const QUrl &documentUrl, qreal progress);
 
 private:
     static QString defaultSettingsFilePath();
@@ -49,7 +63,7 @@ private:
     static QString documentKey(const QUrl &documentUrl, const QString &name);
     void rememberDocumentUrl(const QUrl &documentUrl);
 
-    QSettings m_settings;
+    mutable QSettings m_settings;
     bool m_darkMode = false;
     int m_textFontSize = 18;
     qreal m_lineHeight = 1.5;

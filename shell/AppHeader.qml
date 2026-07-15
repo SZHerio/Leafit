@@ -9,8 +9,10 @@ Rectangle {
     required property var readerWorkspace
     required property var settingsStore
     property bool darkMode: false
+    property bool showingLibrary: false
 
     signal openRequested
+    signal libraryRequested
     signal darkModeToggled(bool darkMode)
 
     implicitHeight: Theme.toolbarHeight
@@ -37,8 +39,16 @@ Rectangle {
             Layout.rightMargin: Theme.spaceSm
         }
 
+        LeaflitIconButton {
+            symbol: "\u25a6"
+            toolTip: qsTr("Library")
+            onChrome: true
+            selected: root.showingLibrary
+            onClicked: root.libraryRequested()
+        }
+
         LeaflitButton {
-            text: qsTr("Open book")
+            text: root.showingLibrary ? qsTr("Add book") : qsTr("Open book")
             variant: "chrome"
             onClicked: root.openRequested()
         }
@@ -47,7 +57,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.leftMargin: Theme.spaceSm
             Layout.rightMargin: Theme.spaceSm
-            text: root.readerController.title
+            text: root.showingLibrary ? qsTr("Library") : root.readerController.title
             color: Theme.chromeMutedTextColor
             font.family: Theme.uiFontFamily
             font.pixelSize: Theme.bodyFontSize
@@ -57,7 +67,7 @@ Rectangle {
         }
 
         Rectangle {
-            visible: root.readerWorkspace.hasDocument
+            visible: !root.showingLibrary && root.readerWorkspace.hasDocument
             Layout.preferredWidth: 1
             Layout.preferredHeight: 24
             Layout.leftMargin: Theme.spaceXs
@@ -66,7 +76,7 @@ Rectangle {
         }
 
         LeaflitIconButton {
-            visible: root.readerWorkspace.hasDocument
+            visible: !root.showingLibrary && root.readerWorkspace.hasDocument
             symbol: "-"
             toolTip: root.readerWorkspace.showingPdf
                          ? qsTr("Zoom out")
@@ -77,7 +87,7 @@ Rectangle {
         }
 
         Label {
-            visible: root.readerWorkspace.hasDocument
+            visible: !root.showingLibrary && root.readerWorkspace.hasDocument
             text: root.readerWorkspace.scaleLabel
             color: Theme.chromeMutedTextColor
             font.family: Theme.uiFontFamily
@@ -88,7 +98,7 @@ Rectangle {
         }
 
         LeaflitIconButton {
-            visible: root.readerWorkspace.hasDocument
+            visible: !root.showingLibrary && root.readerWorkspace.hasDocument
             symbol: "+"
             toolTip: root.readerWorkspace.showingPdf
                          ? qsTr("Zoom in")
@@ -99,7 +109,7 @@ Rectangle {
         }
 
         LeaflitIconButton {
-            visible: root.readerWorkspace.showingPdf
+            visible: !root.showingLibrary && root.readerWorkspace.showingPdf
             symbol: "\u2922"
             toolTip: qsTr("Fit page to width")
             onChrome: true
@@ -107,6 +117,7 @@ Rectangle {
         }
 
         LeaflitIconButton {
+            visible: !root.showingLibrary
             symbol: "Aa"
             symbolPixelSize: Theme.bodyFontSize
             toolTip: qsTr("Reading settings")

@@ -103,7 +103,8 @@ Item {
             if (pdfView.pageCount > 0) {
                 root.settingsStore.savePdfPosition(root.activeDocumentUrl,
                                                    pdfView.currentPage,
-                                                   pdfView.renderScale)
+                                                   pdfView.renderScale,
+                                                   pdfView.readingProgress)
             }
         } else if (root.showingText) {
             root.settingsStore.saveTextPosition(root.activeDocumentUrl,

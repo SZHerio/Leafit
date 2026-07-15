@@ -7,21 +7,35 @@ ApplicationWindow {
 
     required property var readerController
     required property var localStateStore
+    required property var libraryModel
     required property var readingDocumentFormatter
+
+    property bool showingLibrary: true
 
     width: 1120
     height: 760
     minimumWidth: 760
     minimumHeight: 560
     visible: true
-    title: readerController.title.length > 0
-               ? readerController.title + qsTr(" - Leaflit")
-               : qsTr("Leaflit")
+    title: showingLibrary
+               ? qsTr("Library - Leaflit")
+               : readerController.title.length > 0
+                 ? readerController.title + qsTr(" - Leaflit")
+                 : qsTr("Leaflit")
 
     color: Theme.windowColor
 
     function openBook(fileUrl) {
-        root.readerController.openFile(fileUrl)
+        if (root.readerController.openFile(fileUrl)) {
+            root.showingLibrary = false
+        }
+    }
+
+    function showLibrary() {
+        readerWorkspace.flushReadingState()
+        root.localStateStore.sync()
+        root.libraryModel.refresh()
+        root.showingLibrary = true
     }
 
     onClosing: {
@@ -55,22 +69,35 @@ ApplicationWindow {
         readerWorkspace: readerWorkspace
         settingsStore: root.localStateStore
         darkMode: root.localStateStore.darkMode
+        showingLibrary: root.showingLibrary
         onOpenRequested: openDialog.open()
+        onLibraryRequested: root.showLibrary()
         onDarkModeToggled: root.localStateStore.darkMode = darkMode
     }
 
     footer: ReaderStatusBar {
         readerController: root.readerController
         readerWorkspace: readerWorkspace
+        visible: !root.showingLibrary
     }
 
     ReaderWorkspace {
         id: readerWorkspace
 
         anchors.fill: parent
+        visible: !root.showingLibrary
         readerController: root.readerController
         settingsStore: root.localStateStore
         documentFormatter: root.readingDocumentFormatter
         onOpenRequested: openDialog.open()
+    }
+
+    LibraryView {
+        anchors.fill: parent
+        visible: root.showingLibrary
+        libraryModel: root.libraryModel
+        errorMessage: root.readerController.errorMessage
+        onAddRequested: openDialog.open()
+        onOpenRequested: sourceUrl => root.openBook(sourceUrl)
     }
 }

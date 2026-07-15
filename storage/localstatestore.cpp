@@ -1,9 +1,12 @@
 #include "localstatestore.h"
 
 #include <QCryptographicHash>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QStandardPaths>
+
+#include <algorithm>
 
 namespace {
 
@@ -157,12 +160,17 @@ void LocalStateStore::saveTextPosition(const QUrl &documentUrl, qreal progress)
         return;
     }
 
+    progress = qBound(qreal(0), progress, qreal(1));
     rememberDocumentUrl(documentUrl);
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("textProgress")),
-                        qBound(qreal(0), progress, qreal(1)));
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("textProgress")), progress);
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("readingProgress")), progress);
+    emit documentProgressChanged(documentUrl, progress);
 }
 
-void LocalStateStore::savePdfPosition(const QUrl &documentUrl, int page, qreal scale)
+void LocalStateStore::savePdfPosition(const QUrl &documentUrl,
+                                      int page,
+                                      qreal scale,
+                                      qreal progress)
 {
     if (documentUrl.isEmpty()) {
         return;
@@ -172,6 +180,99 @@ void LocalStateStore::savePdfPosition(const QUrl &documentUrl, int page, qreal s
     m_settings.setValue(documentKey(documentUrl, QStringLiteral("pdfPage")), qMax(0, page));
     m_settings.setValue(documentKey(documentUrl, QStringLiteral("pdfScale")),
                         qBound(minimumPdfScale, scale, maximumPdfScale));
+    progress = qBound(qreal(0), progress, qreal(1));
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("readingProgress")), progress);
+    emit documentProgressChanged(documentUrl, progress);
+}
+
+QVector<LibraryBook> LocalStateStore::libraryBooks() const
+{
+    QVector<LibraryBook> books;
+
+    m_settings.beginGroup(QStringLiteral("documents"));
+    const QStringList documentIds = m_settings.childGroups();
+    books.reserve(documentIds.size());
+    for (const QString &documentId : documentIds) {
+        m_settings.beginGroup(documentId);
+        if (!m_settings.value(QStringLiteral("inLibrary"), false).toBool()) {
+            m_settings.endGroup();
+            continue;
+        }
+
+        LibraryBook book;
+        book.sourceUrl = QUrl(m_settings.value(QStringLiteral("sourceUrl")).toString());
+        if (book.sourceUrl.isEmpty()) {
+            m_settings.endGroup();
+            continue;
+        }
+
+        const QFileInfo fileInfo(book.sourceUrl.toLocalFile());
+        book.sourcePath = book.sourceUrl.isLocalFile()
+                              ? fileInfo.absoluteFilePath()
+                              : book.sourceUrl.toDisplayString();
+        book.title = m_settings.value(QStringLiteral("title")).toString().trimmed();
+        if (book.title.isEmpty()) {
+            book.title = fileInfo.completeBaseName();
+        }
+        book.formatName = m_settings.value(QStringLiteral("formatName")).toString().trimmed();
+        if (book.formatName.isEmpty()) {
+            book.formatName = fileInfo.suffix().toUpper();
+        }
+        book.progress = qBound(
+            qreal(0),
+            m_settings.value(QStringLiteral("readingProgress"),
+                             m_settings.value(QStringLiteral("textProgress"), 0)).toReal(),
+            qreal(1));
+        book.lastOpened = QDateTime::fromString(
+            m_settings.value(QStringLiteral("lastOpened")).toString(), Qt::ISODateWithMs);
+        if (!book.lastOpened.isValid()) {
+            book.lastOpened = QDateTime::fromString(
+                m_settings.value(QStringLiteral("lastOpened")).toString(), Qt::ISODate);
+        }
+        book.fileAvailable = !book.sourceUrl.isLocalFile() || fileInfo.exists();
+        books.append(book);
+        m_settings.endGroup();
+    }
+    m_settings.endGroup();
+
+    std::sort(books.begin(), books.end(), [](const LibraryBook &left, const LibraryBook &right) {
+        if (left.lastOpened != right.lastOpened) {
+            return left.lastOpened > right.lastOpened;
+        }
+        return QString::localeAwareCompare(left.title, right.title) < 0;
+    });
+    return books;
+}
+
+void LocalStateStore::recordBookOpened(const QUrl &documentUrl,
+                                       const QString &title,
+                                       const QString &formatName)
+{
+    if (documentUrl.isEmpty()) {
+        return;
+    }
+
+    rememberDocumentUrl(documentUrl);
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("inLibrary")), true);
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("title")), title.trimmed());
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("formatName")),
+                        formatName.trimmed());
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("lastOpened")),
+                        QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
+    emit libraryChanged();
+}
+
+void LocalStateStore::removeFromLibrary(const QUrl &documentUrl)
+{
+    if (documentUrl.isEmpty()) {
+        return;
+    }
+
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("inLibrary")), false);
+    if (m_lastBookUrl == documentUrl) {
+        setLastBookUrl({});
+    }
+    emit libraryChanged();
 }
 
 void LocalStateStore::sync()

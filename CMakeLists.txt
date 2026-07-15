@@ -18,6 +18,9 @@ qt_add_executable(appLeaflit
     documentreader.h
     documentreaders.cpp
     documentreaders.h
+    library/librarybook.h
+    library/librarymodel.cpp
+    library/librarymodel.h
     localdocumentloader.cpp
     localdocumentloader.h
     main.cpp
@@ -33,6 +36,8 @@ qt_add_qml_module(appLeaflit
     URI Leaflit
     QML_FILES
         Main.qml
+        library/LibraryBookDelegate.qml
+        library/LibraryView.qml
         reader/EmptyReaderView.qml
         reader/PdfDocumentView.qml
         reader/ReaderWorkspace.qml
@@ -47,6 +52,7 @@ qt_add_qml_module(appLeaflit
         ui/LeaflitSlider.qml
         ui/LeaflitSurface.qml
         ui/LeaflitSwitch.qml
+        ui/LeaflitTextField.qml
         ui/Theme.qml
 )
 
@@ -87,6 +93,9 @@ if(BUILD_TESTING)
 
     if(TARGET Qt6::Test)
         qt_add_executable(tst_localstatestore
+            library/librarybook.h
+            library/librarymodel.cpp
+            library/librarymodel.h
             storage/localstatestore.cpp
             storage/localstatestore.h
             tests/localstatestoretest.cpp
