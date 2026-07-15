@@ -18,6 +18,8 @@ class ReaderController : public QObject
     Q_PROPERTY(QUrl sourceUrl READ sourceUrl NOTIFY sourceUrlChanged)
     Q_PROPERTY(QUrl pdfSource READ pdfSource NOTIFY pdfSourceChanged)
     Q_PROPERTY(DocumentKind documentKind READ documentKind NOTIFY documentKindChanged)
+    Q_PROPERTY(bool hasDocument READ hasDocument NOTIFY documentKindChanged)
+    Q_PROPERTY(bool textMode READ textMode NOTIFY documentKindChanged)
     Q_PROPERTY(bool pdfMode READ pdfMode NOTIFY documentKindChanged)
     Q_PROPERTY(QString formatName READ formatName NOTIFY formatNameChanged)
     Q_PROPERTY(QString errorMessage READ errorMessage NOTIFY errorMessageChanged)
@@ -39,6 +41,8 @@ public:
     QUrl sourceUrl() const;
     QUrl pdfSource() const;
     DocumentKind documentKind() const;
+    bool hasDocument() const;
+    bool textMode() const;
     bool pdfMode() const;
     QString formatName() const;
     QString errorMessage() const;
@@ -47,6 +51,8 @@ public:
     Q_INVOKABLE void clearError();
 
 signals:
+    void documentOpening();
+    void documentOpened(const QUrl &sourceUrl);
     void textChanged();
     void titleChanged();
     void sourcePathChanged();

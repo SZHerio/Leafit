@@ -1,31 +1,39 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
-import QtQuick.Layouts
-import QtQuick.Pdf
 
 ApplicationWindow {
     id: root
 
-    width: 960
-    height: 720
-    minimumWidth: 720
-    minimumHeight: 520
+    required property var readerController
+    required property var localStateStore
+    required property var readingDocumentFormatter
+
+    width: 1120
+    height: 760
+    minimumWidth: 760
+    minimumHeight: 560
     visible: true
-    title: reader.title.length > 0 ? reader.title + qsTr(" - Leaflit") : qsTr("Leaflit")
+    title: readerController.title.length > 0
+               ? readerController.title + qsTr(" - Leaflit")
+               : qsTr("Leaflit")
 
-    property bool darkTheme: false
-    property int readerFontSize: 18
-    property bool showingPdf: reader.pdfMode
+    color: Theme.windowColor
 
-    readonly property color pageColor: darkTheme ? "#161a1d" : "#f7f5ef"
-    readonly property color panelColor: darkTheme ? "#20262a" : "#ffffff"
-    readonly property color textColor: darkTheme ? "#edf2ef" : "#202124"
-    readonly property color mutedColor: darkTheme ? "#aab4ad" : "#686f69"
-    readonly property color lineColor: darkTheme ? "#333b40" : "#ded9cf"
-    readonly property color accentColor: "#2f8f5b"
+    function openBook(fileUrl) {
+        root.readerController.openFile(fileUrl)
+    }
 
-    color: pageColor
+    onClosing: {
+        readerWorkspace.flushReadingState()
+        root.localStateStore.sync()
+    }
+
+    Binding {
+        target: Theme
+        property: "darkMode"
+        value: root.localStateStore.darkMode
+    }
 
     FileDialog {
         id: openDialog
@@ -39,170 +47,30 @@ ApplicationWindow {
             qsTr("Word documents (*.docx)")
         ]
 
-        onAccepted: reader.openFile(selectedFile)
+        onAccepted: root.openBook(selectedFile)
     }
 
-    PdfDocument {
-        id: pdfDocument
-
-        source: root.showingPdf ? reader.pdfSource : ""
+    header: AppHeader {
+        readerController: root.readerController
+        readerWorkspace: readerWorkspace
+        settingsStore: root.localStateStore
+        darkMode: root.localStateStore.darkMode
+        onOpenRequested: openDialog.open()
+        onDarkModeToggled: root.localStateStore.darkMode = darkMode
     }
 
-    Connections {
-        target: reader
-
-        function onPdfSourceChanged() {
-            pdfViewer.renderScale = 1
-        }
+    footer: ReaderStatusBar {
+        readerController: root.readerController
+        readerWorkspace: readerWorkspace
     }
 
-    header: ToolBar {
-        implicitHeight: 56
+    ReaderWorkspace {
+        id: readerWorkspace
 
-        background: Rectangle {
-            color: root.panelColor
-            border.color: root.lineColor
-            border.width: 1
-        }
-
-        RowLayout {
-            anchors.fill: parent
-            anchors.leftMargin: 16
-            anchors.rightMargin: 16
-            spacing: 10
-
-            Label {
-                text: qsTr("Leaflit")
-                color: root.textColor
-                font.pixelSize: 20
-                font.weight: Font.DemiBold
-            }
-
-            Button {
-                text: qsTr("Open")
-                onClicked: openDialog.open()
-            }
-
-            Item {
-                Layout.fillWidth: true
-            }
-
-            ToolButton {
-                text: qsTr("-")
-                enabled: root.showingPdf ? pdfViewer.renderScale > 0.4 : root.readerFontSize > 12
-                onClicked: {
-                    if (root.showingPdf) {
-                        pdfViewer.renderScale = Math.max(0.4, pdfViewer.renderScale - 0.1)
-                    } else {
-                        root.readerFontSize -= 1
-                    }
-                }
-            }
-
-            Label {
-                text: root.showingPdf ? Math.round(pdfViewer.renderScale * 100) + qsTr("%") :
-                                        root.readerFontSize + qsTr(" px")
-                color: root.mutedColor
-                horizontalAlignment: Text.AlignHCenter
-                Layout.preferredWidth: 64
-            }
-
-            ToolButton {
-                text: qsTr("+")
-                enabled: root.showingPdf ? pdfViewer.renderScale < 3 : root.readerFontSize < 36
-                onClicked: {
-                    if (root.showingPdf) {
-                        pdfViewer.renderScale = Math.min(3, pdfViewer.renderScale + 0.1)
-                    } else {
-                        root.readerFontSize += 1
-                    }
-                }
-            }
-
-            ToolButton {
-                text: qsTr("Fit")
-                visible: root.showingPdf
-                onClicked: pdfViewer.scaleToWidth(pdfHost.width - 32, pdfHost.height)
-            }
-
-            Switch {
-                text: qsTr("Dark")
-                checked: root.darkTheme
-                onToggled: root.darkTheme = checked
-            }
-        }
-    }
-
-    footer: Rectangle {
-        implicitHeight: 34
-        color: root.panelColor
-        border.color: root.lineColor
-        border.width: 1
-
-        Label {
-            anchors.fill: parent
-            anchors.leftMargin: 18
-            anchors.rightMargin: 18
-            text: reader.errorMessage.length > 0 ? reader.errorMessage :
-                  reader.sourcePath.length > 0 ? reader.formatName + qsTr(" - ") + reader.sourcePath : qsTr("No file open")
-            color: reader.errorMessage.length > 0 ? "#c84c4c" : root.mutedColor
-            elide: Text.ElideMiddle
-            verticalAlignment: Text.AlignVCenter
-        }
-    }
-
-    Rectangle {
         anchors.fill: parent
-        color: root.pageColor
-
-        ScrollView {
-            anchors.fill: parent
-            anchors.margins: 20
-            clip: true
-            visible: !root.showingPdf
-
-            TextArea {
-                id: readerText
-
-                readOnly: true
-                selectByMouse: true
-                text: reader.text
-                wrapMode: TextEdit.Wrap
-                color: root.textColor
-                placeholderText: qsTr("No file open")
-                placeholderTextColor: root.mutedColor
-                font.pixelSize: root.readerFontSize
-                leftPadding: 24
-                rightPadding: 24
-                topPadding: 22
-                bottomPadding: 22
-
-                background: Rectangle {
-                    color: root.panelColor
-                    border.color: root.lineColor
-                    radius: 8
-                }
-            }
-        }
-
-        Rectangle {
-            id: pdfHost
-
-            anchors.fill: parent
-            anchors.margins: 20
-            visible: root.showingPdf
-            color: root.panelColor
-            border.color: root.lineColor
-            radius: 8
-            clip: true
-
-            PdfMultiPageView {
-                id: pdfViewer
-
-                anchors.fill: parent
-                anchors.margins: 12
-                document: pdfDocument
-            }
-        }
+        readerController: root.readerController
+        settingsStore: root.localStateStore
+        documentFormatter: root.readingDocumentFormatter
+        onOpenRequested: openDialog.open()
     }
 }

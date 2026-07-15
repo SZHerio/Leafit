@@ -61,6 +61,16 @@ ReaderController::DocumentKind ReaderController::documentKind() const
     return m_documentKind;
 }
 
+bool ReaderController::hasDocument() const
+{
+    return m_documentKind != NoDocument;
+}
+
+bool ReaderController::textMode() const
+{
+    return m_documentKind == TextDocument;
+}
+
 bool ReaderController::pdfMode() const
 {
     return m_documentKind == PdfDocument;
@@ -78,6 +88,7 @@ QString ReaderController::errorMessage() const
 
 bool ReaderController::openFile(const QUrl &fileUrl)
 {
+    emit documentOpening();
     clearError();
 
     const DocumentLoadResult document = m_loader->load(fileUrl);
@@ -87,6 +98,7 @@ bool ReaderController::openFile(const QUrl &fileUrl)
     }
 
     applyDocument(document);
+    emit documentOpened(m_sourceUrl);
     return true;
 }
 
