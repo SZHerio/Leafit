@@ -1,6 +1,7 @@
 #include <QGuiApplication>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
+#include <QStyleHints>
 #include <QVariant>
 #include <QVariantMap>
 
@@ -16,6 +17,7 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName(QStringLiteral("Leaflit"));
 
     QGuiApplication app(argc, argv);
+    app.styleHints()->setWheelScrollLines(6);
 
     LocalStateStore localState;
     ReaderController reader;

@@ -34,6 +34,7 @@ Item {
                                              : textFontSize + qsTr(" px")
 
     property bool restoringReadingState: false
+    property real scaleWheelAccumulator: 0
 
     signal openRequested
 
@@ -57,6 +58,34 @@ Item {
         if (root.showingPdf) {
             pdfView.fitToWidth()
         }
+    }
+
+    function handleScaleWheel(event) {
+        const normalizedDelta = event.pixelDelta.y !== 0
+                                ? event.pixelDelta.y / 80
+                                : event.angleDelta.y / 120
+        if (normalizedDelta === 0) {
+            return
+        }
+
+        if (root.scaleWheelAccumulator * normalizedDelta < 0) {
+            root.scaleWheelAccumulator = 0
+        }
+        root.scaleWheelAccumulator += normalizedDelta
+
+        const steps = root.scaleWheelAccumulator > 0
+                      ? Math.floor(root.scaleWheelAccumulator)
+                      : Math.ceil(root.scaleWheelAccumulator)
+        for (let step = 0; step < Math.abs(steps); ++step) {
+            if (steps > 0) {
+                root.increaseScale()
+            } else {
+                root.decreaseScale()
+            }
+        }
+
+        root.scaleWheelAccumulator -= steps
+        event.accepted = true
     }
 
     function scheduleReadingStateSave() {
@@ -170,5 +199,20 @@ Item {
         source: root.readerController.pdfSource
         onReadingProgressChanged: root.scheduleReadingStateSave()
         onRenderScaleChanged: root.scheduleReadingStateSave()
+    }
+
+    Item {
+        anchors.fill: parent
+        z: 1
+
+        WheelHandler {
+            enabled: root.hasDocument
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            acceptedModifiers: Qt.ControlModifier
+            orientation: Qt.Vertical
+            target: null
+            blocking: true
+            onWheel: event => root.handleScaleWheel(event)
+        }
     }
 }
