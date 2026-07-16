@@ -16,6 +16,7 @@ class ReaderController : public QObject
     Q_OBJECT
     Q_PROPERTY(QString text READ text NOTIFY textChanged)
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
+    Q_PROPERTY(QString author READ author NOTIFY authorChanged)
     Q_PROPERTY(QString sourcePath READ sourcePath NOTIFY sourcePathChanged)
     Q_PROPERTY(QUrl sourceUrl READ sourceUrl NOTIFY sourceUrlChanged)
     Q_PROPERTY(QUrl pdfSource READ pdfSource NOTIFY pdfSourceChanged)
@@ -40,6 +41,7 @@ public:
 
     QString text() const;
     QString title() const;
+    QString author() const;
     QString sourcePath() const;
     QUrl sourceUrl() const;
     QUrl pdfSource() const;
@@ -59,6 +61,7 @@ signals:
     void documentOpened(const QUrl &sourceUrl);
     void textChanged();
     void titleChanged();
+    void authorChanged();
     void sourcePathChanged();
     void sourceUrlChanged();
     void pdfSourceChanged();
@@ -71,6 +74,7 @@ private:
     void applyDocument(const DocumentLoadResult &document);
     void setText(const QString &text);
     void setTitle(const QString &title);
+    void setAuthor(const QString &author);
     void setSourcePath(const QString &sourcePath);
     void setSourceUrl(const QUrl &sourceUrl);
     void setPdfSource(const QUrl &pdfSource);
@@ -81,6 +85,7 @@ private:
 
     QString m_text;
     QString m_title;
+    QString m_author;
     QString m_sourcePath;
     QUrl m_sourceUrl;
     QUrl m_pdfSource;

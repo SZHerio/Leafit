@@ -55,6 +55,7 @@ public:
     QVector<LibraryBook> libraryBooks() const;
     void recordBookOpened(const QUrl &documentUrl,
                           const QString &title,
+                          const QString &author,
                           const QString &formatName);
     void removeFromLibrary(const QUrl &documentUrl);
 

@@ -331,6 +331,7 @@ QVector<LibraryBook> LocalStateStore::libraryBooks() const
         if (book.title.isEmpty()) {
             book.title = fileInfo.completeBaseName();
         }
+        book.author = m_settings.value(QStringLiteral("author")).toString().trimmed();
         book.formatName = m_settings.value(QStringLiteral("formatName")).toString().trimmed();
         if (book.formatName.isEmpty()) {
             book.formatName = fileInfo.suffix().toUpper();
@@ -363,6 +364,7 @@ QVector<LibraryBook> LocalStateStore::libraryBooks() const
 
 void LocalStateStore::recordBookOpened(const QUrl &documentUrl,
                                        const QString &title,
+                                       const QString &author,
                                        const QString &formatName)
 {
     if (documentUrl.isEmpty()) {
@@ -372,6 +374,7 @@ void LocalStateStore::recordBookOpened(const QUrl &documentUrl,
     rememberDocumentUrl(documentUrl);
     m_settings.setValue(documentKey(documentUrl, QStringLiteral("inLibrary")), true);
     m_settings.setValue(documentKey(documentUrl, QStringLiteral("title")), title.trimmed());
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("author")), author.trimmed());
     m_settings.setValue(documentKey(documentUrl, QStringLiteral("formatName")),
                         formatName.trimmed());
     m_settings.setValue(documentKey(documentUrl, QStringLiteral("lastOpened")),

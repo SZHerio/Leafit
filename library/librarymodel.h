@@ -20,6 +20,7 @@ public:
         SourceUrlRole = Qt::UserRole + 1,
         SourcePathRole,
         TitleRole,
+        AuthorRole,
         FormatNameRole,
         ProgressRole,
         LastOpenedRole,

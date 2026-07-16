@@ -39,6 +39,8 @@ QVariant LibraryModel::data(const QModelIndex &index, int role) const
         return book.sourcePath;
     case TitleRole:
         return book.title;
+    case AuthorRole:
+        return book.author;
     case FormatNameRole:
         return book.formatName;
     case ProgressRole:
@@ -58,6 +60,7 @@ QHash<int, QByteArray> LibraryModel::roleNames() const
         {SourceUrlRole, "sourceUrl"},
         {SourcePathRole, "sourcePath"},
         {TitleRole, "title"},
+        {AuthorRole, "author"},
         {FormatNameRole, "formatName"},
         {ProgressRole, "progress"},
         {LastOpenedRole, "lastOpened"},
@@ -119,6 +122,7 @@ QVariantMap LibraryModel::toVariantMap(const LibraryBook &book)
         {QStringLiteral("sourceUrl"), book.sourceUrl},
         {QStringLiteral("sourcePath"), book.sourcePath},
         {QStringLiteral("title"), book.title},
+        {QStringLiteral("author"), book.author},
         {QStringLiteral("formatName"), book.formatName},
         {QStringLiteral("progress"), book.progress},
         {QStringLiteral("lastOpened"), book.lastOpened},
@@ -133,6 +137,7 @@ bool LibraryModel::matchesFilter(const LibraryBook &book, const QString &filterT
     }
 
     return book.title.contains(filterText, Qt::CaseInsensitive)
+           || book.author.contains(filterText, Qt::CaseInsensitive)
            || book.formatName.contains(filterText, Qt::CaseInsensitive)
            || book.sourcePath.contains(filterText, Qt::CaseInsensitive);
 }

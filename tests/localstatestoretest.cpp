@@ -161,16 +161,23 @@ void LocalStateStoreTest::maintainsLocalLibrary()
     const QUrl secondBook = QUrl::fromLocalFile(secondPath);
 
     LocalStateStore store(settingsPath);
-    store.recordBookOpened(firstBook, QStringLiteral("First book"), QStringLiteral("TXT"));
+    store.recordBookOpened(firstBook,
+                           QStringLiteral("First book"),
+                           QStringLiteral("First Author"),
+                           QStringLiteral("TXT"));
     store.saveTextPosition(firstBook, 0.35);
     QTest::qWait(2);
-    store.recordBookOpened(secondBook, QStringLiteral("Second book"), QStringLiteral("PDF"));
+    store.recordBookOpened(secondBook,
+                           QStringLiteral("Second book"),
+                           QStringLiteral("Second Author"),
+                           QStringLiteral("PDF"));
     store.savePdfPosition(secondBook, 2, 1.2, 0.6);
 
     const QVector<LibraryBook> books = store.libraryBooks();
     QCOMPARE(books.size(), 2);
     QCOMPARE(books.at(0).sourceUrl, secondBook);
     QCOMPARE(books.at(0).title, QStringLiteral("Second book"));
+    QCOMPARE(books.at(0).author, QStringLiteral("Second Author"));
     QCOMPARE(books.at(0).formatName, QStringLiteral("PDF"));
     QVERIFY(qAbs(books.at(0).progress - 0.6) < 0.0001);
     QVERIFY(books.at(0).fileAvailable);
@@ -192,12 +199,23 @@ void LocalStateStoreTest::filtersAndRemovesLibraryBooks()
     const QUrl pdfBook = QUrl::fromLocalFile(directory.filePath(QStringLiteral("guide.pdf")));
 
     LocalStateStore store(settingsPath);
-    store.recordBookOpened(textBook, QStringLiteral("Quiet novel"), QStringLiteral("TXT"));
-    store.recordBookOpened(pdfBook, QStringLiteral("Reference guide"), QStringLiteral("PDF"));
+    store.recordBookOpened(textBook,
+                           QStringLiteral("Quiet novel"),
+                           QStringLiteral("Octavia Writer"),
+                           QStringLiteral("TXT"));
+    store.recordBookOpened(pdfBook,
+                           QStringLiteral("Reference guide"),
+                           QStringLiteral("Technical Author"),
+                           QStringLiteral("PDF"));
 
     LibraryModel model(&store);
     QCOMPARE(model.totalCount(), 2);
     QCOMPARE(model.rowCount(), 2);
+
+    model.setFilterText(QStringLiteral("Octavia"));
+    QCOMPARE(model.rowCount(), 1);
+    QCOMPARE(model.data(model.index(0, 0), LibraryModel::AuthorRole).toString(),
+             QStringLiteral("Octavia Writer"));
 
     model.setFilterText(QStringLiteral("guide"));
     QCOMPARE(model.rowCount(), 1);

@@ -43,6 +43,11 @@ QString ReaderController::title() const
     return m_title;
 }
 
+QString ReaderController::author() const
+{
+    return m_author;
+}
+
 QString ReaderController::sourcePath() const
 {
     return m_sourcePath;
@@ -118,6 +123,7 @@ void ReaderController::applyDocument(const DocumentLoadResult &document)
 {
     setText(document.text);
     setTitle(document.title);
+    setAuthor(document.author);
     setSourcePath(document.sourcePath);
     setSourceUrl(document.sourceUrl);
     setPdfSource(document.pdfSource);
@@ -144,6 +150,16 @@ void ReaderController::setTitle(const QString &title)
 
     m_title = title;
     emit titleChanged();
+}
+
+void ReaderController::setAuthor(const QString &author)
+{
+    if (m_author == author) {
+        return;
+    }
+
+    m_author = author;
+    emit authorChanged();
 }
 
 void ReaderController::setSourcePath(const QString &sourcePath)

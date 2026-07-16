@@ -53,6 +53,7 @@ int main(int argc, char *argv[])
                              localState.setLastBookUrl(sourceUrl);
                              localState.recordBookOpened(sourceUrl,
                                                          reader.title(),
+                                                         reader.author(),
                                                          reader.formatName());
                          }
                      });

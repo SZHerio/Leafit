@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(Leaflit VERSION 0.1 LANGUAGES CXX)
+project(Leaflit VERSION 0.1 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-find_package(Qt6 REQUIRED COMPONENTS CorePrivate Gui Pdf PdfQuick Quick QuickControls2 QuickDialogs2 Xml)
+find_package(Qt6 REQUIRED COMPONENTS Gui Pdf PdfQuick Quick QuickControls2 QuickDialogs2 Xml)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -13,7 +13,28 @@ set_source_files_properties(ui/Theme.qml PROPERTIES
     QT_QML_SINGLETON_TYPE TRUE
 )
 
+add_library(leaflit_miniz STATIC
+    third_party/miniz/miniz.c
+    third_party/miniz/miniz_tdef.c
+    third_party/miniz/miniz_tinfl.c
+    third_party/miniz/miniz_zip.c
+)
+
+include(GenerateExportHeader)
+generate_export_header(leaflit_miniz
+    BASE_NAME miniz
+    EXPORT_FILE_NAME ${CMAKE_CURRENT_BINARY_DIR}/miniz_export.h
+)
+
+target_include_directories(leaflit_miniz
+    PUBLIC
+        ${CMAKE_CURRENT_BINARY_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/third_party/miniz
+)
+
 qt_add_executable(appLeaflit
+    archive/ziparchivereader.cpp
+    archive/ziparchivereader.h
     documentloadresult.h
     documentreader.h
     documentreaders.cpp
@@ -73,7 +94,7 @@ set_target_properties(appLeaflit PROPERTIES
 
 target_link_libraries(appLeaflit
     PRIVATE
-        Qt6::CorePrivate
+        leaflit_miniz
         Qt6::Gui
         Qt6::Pdf
         Qt6::PdfQuick
@@ -118,6 +139,8 @@ if(BUILD_TESTING)
         )
 
         qt_add_executable(tst_documentreaders
+            archive/ziparchivereader.cpp
+            archive/ziparchivereader.h
             documentloadresult.h
             documentreader.h
             documentreaders.cpp
@@ -127,7 +150,7 @@ if(BUILD_TESTING)
 
         target_link_libraries(tst_documentreaders
             PRIVATE
-                Qt6::CorePrivate
+                leaflit_miniz
                 Qt6::Gui
                 Qt6::Pdf
                 Qt6::Test

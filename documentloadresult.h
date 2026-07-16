@@ -22,6 +22,7 @@ struct DocumentLoadResult
     DocumentViewMode viewMode = DocumentViewMode::None;
     QString text;
     QString title;
+    QString author;
     QString sourcePath;
     QUrl sourceUrl;
     QUrl pdfSource;
@@ -45,12 +46,14 @@ struct DocumentLoadResult
                                            const QString &formatName,
                                            const QString &text,
                                            const QString &title = {},
+                                           const QString &author = {},
                                            const QVector<DocumentChapter> &chapters = {})
     {
         DocumentLoadResult result;
         result.viewMode = DocumentViewMode::Text;
         result.text = text;
         result.title = title.isEmpty() ? fileInfo.completeBaseName() : title;
+        result.author = author;
         result.sourcePath = fileInfo.absoluteFilePath();
         result.sourceUrl = QUrl::fromLocalFile(result.sourcePath);
         result.formatName = formatName;
@@ -60,11 +63,13 @@ struct DocumentLoadResult
 
     static DocumentLoadResult pdfDocument(const QFileInfo &fileInfo,
                                           const QString &formatName,
-                                          const QString &title = {})
+                                          const QString &title = {},
+                                          const QString &author = {})
     {
         DocumentLoadResult result;
         result.viewMode = DocumentViewMode::Pdf;
         result.title = title.isEmpty() ? fileInfo.completeBaseName() : title;
+        result.author = author;
         result.sourcePath = fileInfo.absoluteFilePath();
         result.sourceUrl = QUrl::fromLocalFile(result.sourcePath);
         result.pdfSource = result.sourceUrl;

@@ -9,6 +9,7 @@ Item {
     required property url sourceUrl
     required property string sourcePath
     required property string title
+    required property string author
     required property string formatName
     required property real progress
     required property date lastOpened
@@ -117,7 +118,10 @@ Item {
         Label {
             Layout.fillWidth: true
             text: root.fileAvailable
-                  ? Qt.formatDateTime(root.lastOpened, qsTr("dd MMM, HH:mm"))
+                  ? (root.author.length > 0
+                     ? root.author + qsTr("  \u00b7  ")
+                       + Qt.formatDateTime(root.lastOpened, qsTr("dd MMM, HH:mm"))
+                     : Qt.formatDateTime(root.lastOpened, qsTr("dd MMM, HH:mm")))
                   : qsTr("File unavailable")
             color: root.fileAvailable ? Theme.mutedTextColor : Theme.dangerColor
             font.family: Theme.uiFontFamily

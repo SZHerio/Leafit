@@ -1,5 +1,7 @@
 #include "documentreaders.h"
 
+#include "archive/ziparchivereader.h"
+
 #include <QCoreApplication>
 #include <QDomDocument>
 #include <QFile>
@@ -9,7 +11,6 @@
 #include <QStringConverter>
 #include <QStringDecoder>
 #include <QTextDocument>
-#include <QtCore/private/qzipreader_p.h>
 
 namespace {
 
@@ -99,6 +100,18 @@ QDomElement directChildElementByName(const QDomNode &root, const QString &name)
     return {};
 }
 
+QList<QDomElement> directChildElementsByName(const QDomNode &root, const QString &name)
+{
+    QList<QDomElement> elements;
+    for (QDomNode node = root.firstChild(); !node.isNull(); node = node.nextSibling()) {
+        const QDomElement element = node.toElement();
+        if (!element.isNull() && elementName(element) == name) {
+            elements.append(element);
+        }
+    }
+    return elements;
+}
+
 QList<QDomElement> elementsByName(const QDomNode &root, const QString &name)
 {
     QList<QDomElement> elements;
@@ -112,6 +125,28 @@ QList<QDomElement> elementsByName(const QDomNode &root, const QString &name)
     }
 
     return elements;
+}
+
+QString attributeByName(const QDomElement &element, const QString &name)
+{
+    const QDomNamedNodeMap attributes = element.attributes();
+    for (int index = 0; index < attributes.count(); ++index) {
+        const QDomAttr attribute = attributes.item(index).toAttr();
+        QString attributeName = attribute.localName();
+        if (attributeName.isEmpty()) {
+            attributeName = attribute.name();
+        }
+
+        const qsizetype separator = attributeName.indexOf(u':');
+        if (separator >= 0) {
+            attributeName = attributeName.mid(separator + 1);
+        }
+
+        if (attributeName == name) {
+            return attribute.value();
+        }
+    }
+    return {};
 }
 
 QString normalizedBlock(QString text)
@@ -327,30 +362,311 @@ QString resolveZipPath(const QString &basePath, const QString &href)
     return cleanZipPath(basePath + u'/' + href);
 }
 
-QByteArray zipFileData(QZipReader *zip, const QString &path)
+QByteArray zipFileData(const ZipArchiveReader &zip, const QString &path)
 {
-    QByteArray data = zip->fileData(path);
+    QByteArray data = zip.fileData(path);
     if (!data.isEmpty()) {
         return data;
     }
 
     const QString decodedPath = cleanZipPath(QUrl::fromPercentEncoding(path.toUtf8()));
     if (decodedPath != path) {
-        data = zip->fileData(decodedPath);
+        data = zip.fileData(decodedPath);
     }
 
     return data;
 }
 
-QString firstZipFileWithSuffix(QZipReader *zip, const QString &suffix)
+QString firstZipFileWithSuffix(const ZipArchiveReader &zip, const QString &suffix)
 {
-    for (const QZipReader::FileInfo &entry : zip->fileInfoList()) {
-        if (entry.isFile && entry.filePath.endsWith(suffix, Qt::CaseInsensitive)) {
-            return entry.filePath;
+    for (const QString &path : zip.filePaths()) {
+        if (path.endsWith(suffix, Qt::CaseInsensitive)) {
+            return path;
         }
     }
 
     return {};
+}
+
+QString joinedElementValues(const QDomNode &root, const QString &name)
+{
+    QStringList values;
+    for (const QDomElement &element : elementsByName(root, name)) {
+        const QString value = normalizedBlock(element.text());
+        if (!value.isEmpty() && !values.contains(value)) {
+            values.append(value);
+        }
+    }
+    return values.join(QStringLiteral(", "));
+}
+
+QString fb2Author(const QDomElement &titleInfo)
+{
+    QStringList authors;
+    for (const QDomElement &authorElement
+         : directChildElementsByName(titleInfo, QStringLiteral("author"))) {
+        QStringList nameParts;
+        static const QStringList partNames = {
+            QStringLiteral("first-name"),
+            QStringLiteral("middle-name"),
+            QStringLiteral("last-name")
+        };
+        for (const QString &partName : partNames) {
+            const QString part = normalizedBlock(
+                directChildElementByName(authorElement, partName).text());
+            if (!part.isEmpty()) {
+                nameParts.append(part);
+            }
+        }
+
+        QString author = nameParts.join(u' ');
+        if (author.isEmpty()) {
+            author = normalizedBlock(
+                directChildElementByName(authorElement, QStringLiteral("nickname")).text());
+        }
+        if (!author.isEmpty() && !authors.contains(author)) {
+            authors.append(author);
+        }
+    }
+    return authors.join(QStringLiteral(", "));
+}
+
+struct EpubManifestItem final
+{
+    QString href;
+    QString mediaType;
+    QString properties;
+};
+
+struct EpubReference final
+{
+    QString path;
+    QString fragment;
+    bool valid = false;
+};
+
+struct EpubTocEntry final
+{
+    QString title;
+    QString path;
+    QString fragment;
+};
+
+struct EpubChapterContent final
+{
+    QString path;
+    QString title;
+    QString text;
+    QByteArray markup;
+    qsizetype offset = 0;
+};
+
+bool containsToken(const QString &values, const QString &token)
+{
+    return values.simplified().split(u' ', Qt::SkipEmptyParts).contains(token);
+}
+
+QString packageItemPath(const QString &packageDirectory, QString href)
+{
+    const qsizetype fragment = href.indexOf(u'#');
+    if (fragment >= 0) {
+        href.truncate(fragment);
+    }
+    const qsizetype query = href.indexOf(u'?');
+    if (query >= 0) {
+        href.truncate(query);
+    }
+    href = QUrl::fromPercentEncoding(href.toUtf8());
+    return resolveZipPath(packageDirectory, href);
+}
+
+EpubReference resolveEpubReference(const QString &documentPath, QString href)
+{
+    href = href.trimmed();
+    if (href.isEmpty() || href.startsWith(QStringLiteral("//"))) {
+        return {};
+    }
+
+    const qsizetype fragmentSeparator = href.indexOf(u'#');
+    QString fragment;
+    if (fragmentSeparator >= 0) {
+        fragment = QUrl::fromPercentEncoding(href.mid(fragmentSeparator + 1).toUtf8());
+        href.truncate(fragmentSeparator);
+    }
+
+    const qsizetype querySeparator = href.indexOf(u'?');
+    if (querySeparator >= 0) {
+        href.truncate(querySeparator);
+    }
+
+    const qsizetype schemeSeparator = href.indexOf(u':');
+    const qsizetype pathSeparator = href.indexOf(u'/');
+    if (schemeSeparator >= 0
+        && (pathSeparator < 0 || schemeSeparator < pathSeparator)) {
+        return {};
+    }
+
+    href = QUrl::fromPercentEncoding(href.toUtf8());
+    const QString path = href.isEmpty()
+                             ? documentPath
+                             : resolveZipPath(zipDirectory(documentPath), href);
+    return {path, fragment, !path.isEmpty()};
+}
+
+QVector<EpubTocEntry> epub3Navigation(const ZipArchiveReader &zip,
+                                      const QHash<QString, EpubManifestItem> &manifest,
+                                      const QString &packageDirectory)
+{
+    EpubManifestItem navigationItem;
+    for (auto item = manifest.cbegin(); item != manifest.cend(); ++item) {
+        if (containsToken(item->properties, QStringLiteral("nav"))) {
+            navigationItem = item.value();
+            break;
+        }
+    }
+    if (navigationItem.href.isEmpty()) {
+        return {};
+    }
+
+    const QString navigationPath = packageItemPath(packageDirectory, navigationItem.href);
+    const QByteArray navigationBytes = zipFileData(zip, navigationPath);
+    QDomDocument navigationDocument;
+    if (navigationBytes.isEmpty() || !navigationDocument.setContent(navigationBytes)) {
+        return {};
+    }
+
+    const QList<QDomElement> navigationElements = elementsByName(
+        navigationDocument, QStringLiteral("nav"));
+    QDomElement tocNavigation;
+    for (const QDomElement &navigation : navigationElements) {
+        if (containsToken(attributeByName(navigation, QStringLiteral("type")),
+                          QStringLiteral("toc"))) {
+            tocNavigation = navigation;
+            break;
+        }
+    }
+    if (tocNavigation.isNull() && !navigationElements.isEmpty()) {
+        tocNavigation = navigationElements.constFirst();
+    }
+
+    QVector<EpubTocEntry> entries;
+    for (const QDomElement &anchor : elementsByName(tocNavigation, QStringLiteral("a"))) {
+        const QString title = normalizedBlock(xmlNodeText(anchor));
+        const EpubReference reference = resolveEpubReference(
+            navigationPath, attributeByName(anchor, QStringLiteral("href")));
+        if (!title.isEmpty() && reference.valid) {
+            entries.append({title, reference.path, reference.fragment});
+        }
+    }
+    return entries;
+}
+
+QVector<EpubTocEntry> epub2Navigation(const ZipArchiveReader &zip,
+                                      const QDomDocument &packageDocument,
+                                      const QHash<QString, EpubManifestItem> &manifest,
+                                      const QString &packageDirectory)
+{
+    EpubManifestItem navigationItem;
+    const QDomElement spine = firstElementByName(packageDocument, QStringLiteral("spine"));
+    const QString navigationId = attributeByName(spine, QStringLiteral("toc"));
+    if (!navigationId.isEmpty()) {
+        navigationItem = manifest.value(navigationId);
+    }
+    if (navigationItem.href.isEmpty()) {
+        for (auto item = manifest.cbegin(); item != manifest.cend(); ++item) {
+            if (item->mediaType == QLatin1String("application/x-dtbncx+xml")) {
+                navigationItem = item.value();
+                break;
+            }
+        }
+    }
+    if (navigationItem.href.isEmpty()) {
+        return {};
+    }
+
+    const QString navigationPath = packageItemPath(packageDirectory, navigationItem.href);
+    const QByteArray navigationBytes = zipFileData(zip, navigationPath);
+    QDomDocument navigationDocument;
+    if (navigationBytes.isEmpty() || !navigationDocument.setContent(navigationBytes)) {
+        return {};
+    }
+
+    QVector<EpubTocEntry> entries;
+    for (const QDomElement &navigationPoint
+         : elementsByName(navigationDocument, QStringLiteral("navPoint"))) {
+        const QDomElement labelElement = directChildElementByName(
+            navigationPoint, QStringLiteral("navLabel"));
+        const QDomElement contentElement = directChildElementByName(
+            navigationPoint, QStringLiteral("content"));
+        const QString title = normalizedBlock(
+            firstElementByName(labelElement, QStringLiteral("text")).text());
+        const EpubReference reference = resolveEpubReference(
+            navigationPath, attributeByName(contentElement, QStringLiteral("src")));
+        if (!title.isEmpty() && reference.valid) {
+            entries.append({title, reference.path, reference.fragment});
+        }
+    }
+    return entries;
+}
+
+QDomElement elementWithAnchor(const QDomNode &root, const QString &anchor)
+{
+    for (QDomNode node = root.firstChild(); !node.isNull(); node = node.nextSibling()) {
+        const QDomElement element = node.toElement();
+        if (!element.isNull()
+            && (attributeByName(element, QStringLiteral("id")) == anchor
+                || attributeByName(element, QStringLiteral("name")) == anchor)) {
+            return element;
+        }
+
+        const QDomElement nested = elementWithAnchor(node, anchor);
+        if (!nested.isNull()) {
+            return nested;
+        }
+    }
+    return {};
+}
+
+qsizetype tocOffsetInChapter(const EpubTocEntry &entry,
+                             const EpubChapterContent &chapter)
+{
+    QString anchorText;
+    if (!entry.fragment.isEmpty()) {
+        QDomDocument document;
+        if (document.setContent(chapter.markup)) {
+            anchorText = normalizedBlock(
+                xmlNodeText(elementWithAnchor(document, entry.fragment)));
+        }
+    }
+
+    qsizetype localOffset = -1;
+    if (!anchorText.isEmpty()) {
+        localOffset = chapter.text.indexOf(anchorText, 0, Qt::CaseInsensitive);
+    }
+    if (localOffset < 0) {
+        localOffset = chapter.text.indexOf(entry.title, 0, Qt::CaseInsensitive);
+    }
+    return chapter.offset + qMax(qsizetype(0), localOffset);
+}
+
+QVector<ChapterOffset> epubChapterOffsets(const QVector<EpubChapterContent> &chapters,
+                                          const QVector<EpubTocEntry> &tocEntries)
+{
+    QVector<ChapterOffset> offsets;
+    for (const EpubChapterContent &chapter : chapters) {
+        bool hasTocEntry = false;
+        for (const EpubTocEntry &entry : tocEntries) {
+            if (entry.path != chapter.path) {
+                continue;
+            }
+            offsets.append({entry.title, tocOffsetInChapter(entry, chapter)});
+            hasTocEntry = true;
+        }
+        if (!hasTocEntry) {
+            offsets.append({chapter.title, chapter.offset});
+        }
+    }
+    return offsets;
 }
 
 QString pdfErrorText(QPdfDocument::Error error)
@@ -447,7 +763,10 @@ DocumentLoadResult Fb2DocumentReader::load(const QFileInfo &fileInfo) const
             trDocument("Could not parse FB2: %1 at %2:%3.").arg(parseError).arg(errorLine).arg(errorColumn));
     }
 
-    const QDomElement titleElement = firstElementByName(document, QStringLiteral("book-title"));
+    const QDomElement description = firstElementByName(document, QStringLiteral("description"));
+    const QDomElement titleInfo = firstElementByName(description, QStringLiteral("title-info"));
+    const QDomElement titleElement = directChildElementByName(
+        titleInfo, QStringLiteral("book-title"));
     QStringList blocks;
     QStringList chapterTitles;
     for (const QDomElement &body : elementsByName(document, QStringLiteral("body"))) {
@@ -468,6 +787,7 @@ DocumentLoadResult Fb2DocumentReader::load(const QFileInfo &fileInfo) const
                                             QStringLiteral("FB2"),
                                             text,
                                             normalizedBlock(titleElement.text()),
+                                            fb2Author(titleInfo),
                                             chaptersFromTitles(text, chapterTitles));
 }
 
@@ -478,30 +798,31 @@ QStringList EpubDocumentReader::suffixes() const
 
 DocumentLoadResult EpubDocumentReader::load(const QFileInfo &fileInfo) const
 {
-    QZipReader zip(fileInfo.absoluteFilePath());
-    if (!zip.exists() || !zip.isReadable()) {
+    const ZipArchiveReader zip(fileInfo.absoluteFilePath());
+    if (!zip.isOpen()) {
         return DocumentLoadResult::failure(trDocument("Could not open EPUB archive."));
     }
 
     QString opfPath;
-    const QByteArray containerXml = zipFileData(&zip, QStringLiteral("META-INF/container.xml"));
+    const QByteArray containerXml = zipFileData(zip, QStringLiteral("META-INF/container.xml"));
     if (!containerXml.isEmpty()) {
         QDomDocument container;
         if (container.setContent(containerXml)) {
             const QDomElement rootfile = firstElementByName(container, QStringLiteral("rootfile"));
-            opfPath = rootfile.attribute(QStringLiteral("full-path"));
+            opfPath = cleanZipPath(QUrl::fromPercentEncoding(
+                attributeByName(rootfile, QStringLiteral("full-path")).toUtf8()));
         }
     }
 
     if (opfPath.isEmpty()) {
-        opfPath = firstZipFileWithSuffix(&zip, QStringLiteral(".opf"));
+        opfPath = firstZipFileWithSuffix(zip, QStringLiteral(".opf"));
     }
 
     if (opfPath.isEmpty()) {
         return DocumentLoadResult::failure(trDocument("Could not find EPUB package file."));
     }
 
-    const QByteArray opfBytes = zipFileData(&zip, opfPath);
+    const QByteArray opfBytes = zipFileData(zip, opfPath);
     if (opfBytes.isEmpty()) {
         return DocumentLoadResult::failure(trDocument("Could not read EPUB package file."));
     }
@@ -518,56 +839,72 @@ DocumentLoadResult EpubDocumentReader::load(const QFileInfo &fileInfo) const
                 .arg(errorColumn));
     }
 
-    struct ManifestItem
-    {
-        QString href;
-        QString mediaType;
-    };
-
-    QHash<QString, ManifestItem> manifest;
+    QHash<QString, EpubManifestItem> manifest;
     for (const QDomElement &item : elementsByName(opf, QStringLiteral("item"))) {
-        manifest.insert(item.attribute(QStringLiteral("id")),
-                        {item.attribute(QStringLiteral("href")),
-                         item.attribute(QStringLiteral("media-type"))});
+        manifest.insert(attributeByName(item, QStringLiteral("id")),
+                        {attributeByName(item, QStringLiteral("href")),
+                         attributeByName(item, QStringLiteral("media-type")),
+                         attributeByName(item, QStringLiteral("properties"))});
     }
 
     const QString basePath = zipDirectory(opfPath);
     QStringList chapterPaths;
-    for (const QDomElement &itemref : elementsByName(opf, QStringLiteral("itemref"))) {
-        const ManifestItem item = manifest.value(itemref.attribute(QStringLiteral("idref")));
-        if (!item.href.isEmpty()) {
-            chapterPaths.append(resolveZipPath(basePath, item.href));
+    const QDomElement spine = firstElementByName(opf, QStringLiteral("spine"));
+    for (const QDomElement &itemref : elementsByName(spine, QStringLiteral("itemref"))) {
+        if (attributeByName(itemref, QStringLiteral("linear")).compare(
+                QStringLiteral("no"), Qt::CaseInsensitive) == 0) {
+            continue;
+        }
+
+        const EpubManifestItem item = manifest.value(
+            attributeByName(itemref, QStringLiteral("idref")));
+        const QString chapterPath = packageItemPath(basePath, item.href);
+        if (!chapterPath.isEmpty() && !chapterPaths.contains(chapterPath)) {
+            chapterPaths.append(chapterPath);
         }
     }
 
     if (chapterPaths.isEmpty()) {
-        for (const ManifestItem &item : manifest) {
+        for (const EpubManifestItem &item : manifest) {
             if (item.mediaType == QLatin1String("application/xhtml+xml")
                 || item.mediaType == QLatin1String("text/html")) {
-                chapterPaths.append(resolveZipPath(basePath, item.href));
+                const QString chapterPath = packageItemPath(basePath, item.href);
+                if (!chapterPath.isEmpty()
+                    && !containsToken(item.properties, QStringLiteral("nav"))) {
+                    chapterPaths.append(chapterPath);
+                }
             }
         }
+        chapterPaths.sort(Qt::CaseInsensitive);
+    }
+
+    QVector<EpubTocEntry> tocEntries = epub3Navigation(zip, manifest, basePath);
+    if (tocEntries.isEmpty()) {
+        tocEntries = epub2Navigation(zip, opf, manifest, basePath);
     }
 
     QString text;
-    QVector<ChapterOffset> chapterOffsets;
+    QVector<EpubChapterContent> chapters;
     int chapterNumber = 1;
     for (const QString &chapterPath : chapterPaths) {
-        const QByteArray chapterBytes = zipFileData(&zip, chapterPath);
+        const QByteArray chapterBytes = zipFileData(zip, chapterPath);
         if (chapterBytes.isEmpty()) {
             continue;
         }
 
-        const QString chapter = textFromHtml(decodeText(chapterBytes));
-        if (!chapter.isEmpty()) {
+        const QString chapterText = textFromHtml(decodeText(chapterBytes));
+        if (!chapterText.isEmpty()) {
             if (!text.isEmpty()) {
                 text += QStringLiteral("\n\n");
             }
-            chapterOffsets.append({chapterTitleFromHtml(chapterBytes,
-                                                        chapterPath,
-                                                        chapterNumber),
-                                   text.size()});
-            text += chapter;
+            chapters.append({chapterPath,
+                             chapterTitleFromHtml(chapterBytes,
+                                                  chapterPath,
+                                                  chapterNumber),
+                             chapterText,
+                             chapterBytes,
+                             text.size()});
+            text += chapterText;
             ++chapterNumber;
         }
     }
@@ -576,12 +913,17 @@ DocumentLoadResult EpubDocumentReader::load(const QFileInfo &fileInfo) const
         return DocumentLoadResult::failure(trDocument("Could not extract readable text from EPUB."));
     }
 
-    const QDomElement titleElement = firstElementByName(opf, QStringLiteral("title"));
+    const QDomElement metadata = firstElementByName(opf, QStringLiteral("metadata"));
+    const QDomElement titleElement = firstElementByName(metadata, QStringLiteral("title"));
     return DocumentLoadResult::textDocument(fileInfo,
                                             QStringLiteral("EPUB"),
-                                            text.trimmed(),
+                                            text,
                                             normalizedBlock(titleElement.text()),
-                                            normalizedChapters(text, chapterOffsets));
+                                            joinedElementValues(metadata,
+                                                                QStringLiteral("creator")),
+                                            normalizedChapters(
+                                                text,
+                                                epubChapterOffsets(chapters, tocEntries)));
 }
 
 QStringList DocxDocumentReader::suffixes() const
@@ -591,12 +933,12 @@ QStringList DocxDocumentReader::suffixes() const
 
 DocumentLoadResult DocxDocumentReader::load(const QFileInfo &fileInfo) const
 {
-    QZipReader zip(fileInfo.absoluteFilePath());
-    if (!zip.exists() || !zip.isReadable()) {
+    const ZipArchiveReader zip(fileInfo.absoluteFilePath());
+    if (!zip.isOpen()) {
         return DocumentLoadResult::failure(trDocument("Could not open DOCX archive."));
     }
 
-    const QByteArray documentXml = zipFileData(&zip, QStringLiteral("word/document.xml"));
+    const QByteArray documentXml = zipFileData(zip, QStringLiteral("word/document.xml"));
     if (documentXml.isEmpty()) {
         return DocumentLoadResult::failure(trDocument("Could not find DOCX document body."));
     }
@@ -643,5 +985,6 @@ DocumentLoadResult PdfDocumentReader::load(const QFileInfo &fileInfo) const
     }
 
     const QString title = document.metaData(QPdfDocument::MetaDataField::Title).toString().trimmed();
-    return DocumentLoadResult::pdfDocument(fileInfo, QStringLiteral("PDF"), title);
+    const QString author = document.metaData(QPdfDocument::MetaDataField::Author).toString().trimmed();
+    return DocumentLoadResult::pdfDocument(fileInfo, QStringLiteral("PDF"), title, author);
 }

@@ -184,6 +184,16 @@ Item {
                             }
 
                             Label {
+                                Layout.fillWidth: true
+                                visible: text.length > 0
+                                text: continueCard.book.author || ""
+                                color: Theme.mutedTextColor
+                                font.family: Theme.uiFontFamily
+                                font.pixelSize: Theme.captionFontSize
+                                elide: Text.ElideRight
+                            }
+
+                            Label {
                                 text: (continueCard.book.formatName || "")
                                       + qsTr("  \u00b7  ")
                                       + Math.round((continueCard.book.progress || 0) * 100)

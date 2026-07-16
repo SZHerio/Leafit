@@ -74,7 +74,12 @@ Rectangle {
             Layout.fillWidth: true
             Layout.leftMargin: Theme.spaceSm
             Layout.rightMargin: Theme.spaceSm
-            text: root.showingLibrary ? qsTr("Library") : root.readerController.title
+            text: root.showingLibrary
+                  ? qsTr("Library")
+                  : root.readerController.title
+                    + (root.readerController.author.length > 0
+                       ? qsTr("  \u00b7  ") + root.readerController.author
+                       : "")
             color: Theme.chromeMutedTextColor
             font.family: Theme.uiFontFamily
             font.pixelSize: Theme.bodyFontSize
