@@ -13,7 +13,9 @@ class LocalStateStoreTest final : public QObject
 
 private slots:
     void persistsPreferencesAndLastBook();
+    void migratesLegacyTheme();
     void migratesLegacyScrollSpeed();
+    void resetsReadingPreferences();
     void keepsIndependentDocumentPositions();
     void maintainsLocalLibrary();
     void filtersAndRemovesLibraryBooks();
@@ -29,7 +31,8 @@ void LocalStateStoreTest::persistsPreferencesAndLastBook()
 
     {
         LocalStateStore store(settingsPath);
-        store.setDarkMode(true);
+        store.setColorTheme(QStringLiteral("sepia"));
+        store.setReadingFont(QStringLiteral("sans"));
         store.setTextFontSize(99);
         store.setLineHeight(9.0);
         store.setPageWidth(1);
@@ -39,12 +42,36 @@ void LocalStateStoreTest::persistsPreferencesAndLastBook()
     }
 
     LocalStateStore restored(settingsPath);
-    QVERIFY(restored.darkMode());
+    QCOMPARE(restored.colorTheme(), QStringLiteral("sepia"));
+    QCOMPARE(restored.readingFont(), QStringLiteral("sans"));
+    QVERIFY(!restored.darkMode());
     QCOMPARE(restored.textFontSize(), 36);
     QCOMPARE(restored.lineHeight(), 2.0);
     QCOMPARE(restored.pageWidth(), 560);
     QCOMPARE(restored.scrollSpeed(), 200);
     QCOMPARE(restored.lastBookUrl(), bookUrl);
+}
+
+void LocalStateStoreTest::migratesLegacyTheme()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString settingsPath = directory.filePath(QStringLiteral("settings.ini"));
+    {
+        QSettings settings(settingsPath, QSettings::IniFormat);
+        settings.setValue(QStringLiteral("appearance/darkMode"), true);
+    }
+
+    LocalStateStore store(settingsPath);
+    QCOMPARE(store.colorTheme(), QStringLiteral("dark"));
+    QVERIFY(store.darkMode());
+    store.sync();
+
+    QSettings migratedSettings(settingsPath, QSettings::IniFormat);
+    QCOMPARE(migratedSettings.value(QStringLiteral("appearance/colorTheme")).toString(),
+             QStringLiteral("dark"));
+    QVERIFY(!migratedSettings.contains(QStringLiteral("appearance/darkMode")));
 }
 
 void LocalStateStoreTest::migratesLegacyScrollSpeed()
@@ -65,6 +92,29 @@ void LocalStateStoreTest::migratesLegacyScrollSpeed()
     QSettings migratedSettings(settingsPath, QSettings::IniFormat);
     QCOMPARE(migratedSettings.value(QStringLiteral("reading/scrollSpeed")).toInt(), 150);
     QVERIFY(!migratedSettings.contains(QStringLiteral("reading/wheelScrollLines")));
+}
+
+void LocalStateStoreTest::resetsReadingPreferences()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    LocalStateStore store(directory.filePath(QStringLiteral("settings.ini")));
+    store.setColorTheme(QStringLiteral("dark"));
+    store.setReadingFont(QStringLiteral("mono"));
+    store.setTextFontSize(30);
+    store.setLineHeight(1.8);
+    store.setPageWidth(1000);
+    store.setScrollSpeed(180);
+
+    store.resetReadingPreferences();
+
+    QCOMPARE(store.colorTheme(), QStringLiteral("light"));
+    QCOMPARE(store.readingFont(), QStringLiteral("serif"));
+    QCOMPARE(store.textFontSize(), 18);
+    QCOMPARE(store.lineHeight(), 1.5);
+    QCOMPARE(store.pageWidth(), 820);
+    QCOMPARE(store.scrollSpeed(), 100);
 }
 
 void LocalStateStoreTest::keepsIndependentDocumentPositions()

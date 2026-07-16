@@ -6,6 +6,7 @@ Item {
 
     required property string documentText
     required property var documentFormatter
+    property string fontFamily: Theme.readingFontFamily
     property int fontSize: 18
     property real lineHeight: 1.5
     property int preferredPageWidth: Theme.readerPageMaxWidth
@@ -82,6 +83,9 @@ Item {
         Qt.callLater(root.applyTextFormatting)
     }
     onLineHeightChanged: Qt.callLater(root.applyTextFormatting)
+    onFontFamilyChanged: root.restorePosition(root.readingProgress)
+    onFontSizeChanged: root.restorePosition(root.readingProgress)
+    onPreferredPageWidthChanged: root.restorePosition(root.readingProgress)
     onMaximumContentYChanged: {
         if (root.positionRestorePending) {
             positionRestoreTimer.restart()
@@ -149,7 +153,7 @@ Item {
                     color: Theme.textColor
                     selectionColor: Theme.accentColor
                     selectedTextColor: Theme.onAccentColor
-                    font.family: Theme.readingFontFamily
+                    font.family: root.fontFamily
                     font.pixelSize: root.fontSize
                     font.letterSpacing: 0
                     font.kerning: true

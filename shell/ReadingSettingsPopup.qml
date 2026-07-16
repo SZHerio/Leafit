@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import QtQuick.Window
 
 Popup {
     id: root
@@ -8,11 +9,32 @@ Popup {
     required property var settingsStore
     property bool textSettingsAvailable: true
 
-    width: 304
+    readonly property var fontOptions: [
+        { value: "serif", label: qsTr("Serif") },
+        { value: "sans", label: qsTr("Sans") },
+        { value: "mono", label: qsTr("Mono") }
+    ]
+    readonly property var themeOptions: [
+        { value: "light", label: qsTr("Light") },
+        { value: "sepia", label: qsTr("Sepia") },
+        { value: "dark", label: qsTr("Dark") }
+    ]
+    readonly property real hostWindowHeight: root.parent && root.parent.Window.window
+                                                   ? root.parent.Window.window.height
+                                                   : 720
+    readonly property real maximumPanelHeight: Math.max(320,
+                                                         hostWindowHeight
+                                                         - root.y
+                                                         - Theme.spaceMd)
+
+    width: 336
+    height: Math.min(settingsColumn.implicitHeight + topPadding + bottomPadding,
+                     maximumPanelHeight)
     padding: Theme.spaceLg
     modal: false
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    onOpened: settingsFlickable.contentY = 0
 
     background: Rectangle {
         color: Theme.surfaceColor
@@ -21,165 +43,222 @@ Popup {
         border.width: 1
     }
 
-    contentItem: ColumnLayout {
-        spacing: Theme.spaceMd
+    contentItem: Flickable {
+        id: settingsFlickable
 
-        Label {
-            text: qsTr("Reading settings")
-            color: Theme.textColor
-            font.family: Theme.uiFontFamily
-            font.pixelSize: Theme.bodyLargeFontSize
-            font.weight: Font.DemiBold
-            Layout.fillWidth: true
+        contentWidth: width
+        contentHeight: settingsColumn.implicitHeight
+        clip: true
+        boundsBehavior: Flickable.StopAtBounds
+        flickableDirection: Flickable.VerticalFlick
+        ScrollBar.vertical: LeaflitScrollBar {
         }
 
-        RowLayout {
-            visible: root.textSettingsAvailable
-            Layout.fillWidth: true
-            spacing: Theme.spaceSm
+        ColumnLayout {
+            id: settingsColumn
+
+            width: settingsFlickable.width
+                   - (settingsFlickable.contentHeight > settingsFlickable.height
+                      ? Theme.spaceSm
+                      : 0)
+            spacing: Theme.spaceMd
 
             Label {
                 Layout.fillWidth: true
-                text: qsTr("Font size")
-                color: Theme.mutedTextColor
-                font.family: Theme.uiFontFamily
-                font.pixelSize: Theme.bodyFontSize
-            }
-
-            LeaflitIconButton {
-                symbol: "-"
-                toolTip: qsTr("Decrease font size")
-                enabled: root.settingsStore.textFontSize > 12
-                onClicked: root.settingsStore.textFontSize -= 1
-            }
-
-            Label {
-                Layout.preferredWidth: 34
-                text: root.settingsStore.textFontSize
+                text: qsTr("Reading settings")
                 color: Theme.textColor
                 font.family: Theme.uiFontFamily
-                font.pixelSize: Theme.bodyFontSize
+                font.pixelSize: Theme.bodyLargeFontSize
                 font.weight: Font.DemiBold
-                horizontalAlignment: Text.AlignHCenter
             }
 
-            LeaflitIconButton {
-                symbol: "+"
-                toolTip: qsTr("Increase font size")
-                enabled: root.settingsStore.textFontSize < 36
-                onClicked: root.settingsStore.textFontSize += 1
-            }
-        }
-
-        ColumnLayout {
-            visible: root.textSettingsAvailable
-            Layout.fillWidth: true
-            spacing: Theme.spaceXs
-
-            RowLayout {
+            ColumnLayout {
+                visible: root.textSettingsAvailable
                 Layout.fillWidth: true
+                spacing: Theme.spaceXs
 
                 Label {
-                    Layout.fillWidth: true
-                    text: qsTr("Line spacing")
+                    text: qsTr("Font")
                     color: Theme.mutedTextColor
                     font.family: Theme.uiFontFamily
                     font.pixelSize: Theme.bodyFontSize
                 }
 
-                Label {
-                    text: Number(root.settingsStore.lineHeight).toFixed(2)
-                    color: Theme.textColor
-                    font.family: Theme.uiFontFamily
-                    font.pixelSize: Theme.captionFontSize
-                    font.weight: Font.Medium
+                LeaflitSegmentedControl {
+                    Layout.fillWidth: true
+                    model: root.fontOptions
+                    value: root.settingsStore.readingFont
+                    onValueSelected: value => root.settingsStore.readingFont = value
                 }
             }
 
-            LeaflitSlider {
-                Layout.fillWidth: true
-                from: 1.2
-                to: 2.0
-                stepSize: 0.05
-                value: root.settingsStore.lineHeight
-                onMoved: root.settingsStore.lineHeight = Math.round(value * 20) / 20
-            }
-        }
-
-        ColumnLayout {
-            visible: root.textSettingsAvailable
-            Layout.fillWidth: true
-            spacing: Theme.spaceXs
-
             RowLayout {
+                visible: root.textSettingsAvailable
                 Layout.fillWidth: true
+                spacing: Theme.spaceSm
 
                 Label {
                     Layout.fillWidth: true
-                    text: qsTr("Text width")
+                    text: qsTr("Font size")
                     color: Theme.mutedTextColor
                     font.family: Theme.uiFontFamily
                     font.pixelSize: Theme.bodyFontSize
                 }
 
+                LeaflitIconButton {
+                    symbol: "-"
+                    toolTip: qsTr("Decrease font size")
+                    enabled: root.settingsStore.textFontSize > 12
+                    onClicked: root.settingsStore.textFontSize -= 1
+                }
+
                 Label {
-                    text: root.settingsStore.pageWidth + qsTr(" px")
+                    Layout.preferredWidth: 34
+                    text: root.settingsStore.textFontSize
                     color: Theme.textColor
                     font.family: Theme.uiFontFamily
-                    font.pixelSize: Theme.captionFontSize
-                    font.weight: Font.Medium
+                    font.pixelSize: Theme.bodyFontSize
+                    font.weight: Font.DemiBold
+                    horizontalAlignment: Text.AlignHCenter
+                }
+
+                LeaflitIconButton {
+                    symbol: "+"
+                    toolTip: qsTr("Increase font size")
+                    enabled: root.settingsStore.textFontSize < 36
+                    onClicked: root.settingsStore.textFontSize += 1
                 }
             }
 
-            LeaflitSlider {
+            ColumnLayout {
+                visible: root.textSettingsAvailable
                 Layout.fillWidth: true
-                from: 560
-                to: 1040
-                stepSize: 20
-                value: root.settingsStore.pageWidth
-                onMoved: root.settingsStore.pageWidth = Math.round(value / 20) * 20
+                spacing: Theme.spaceXs
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Line spacing")
+                        color: Theme.mutedTextColor
+                        font.family: Theme.uiFontFamily
+                        font.pixelSize: Theme.bodyFontSize
+                    }
+
+                    Label {
+                        text: Number(root.settingsStore.lineHeight).toFixed(2)
+                        color: Theme.textColor
+                        font.family: Theme.uiFontFamily
+                        font.pixelSize: Theme.captionFontSize
+                        font.weight: Font.Medium
+                    }
+                }
+
+                LeaflitSlider {
+                    Layout.fillWidth: true
+                    from: 1.2
+                    to: 2.0
+                    stepSize: 0.05
+                    value: root.settingsStore.lineHeight
+                    onMoved: root.settingsStore.lineHeight = Math.round(value * 20) / 20
+                }
             }
-        }
 
-        ColumnLayout {
-            Layout.fillWidth: true
-            spacing: Theme.spaceXs
-
-            RowLayout {
+            ColumnLayout {
+                visible: root.textSettingsAvailable
                 Layout.fillWidth: true
+                spacing: Theme.spaceXs
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Text width")
+                        color: Theme.mutedTextColor
+                        font.family: Theme.uiFontFamily
+                        font.pixelSize: Theme.bodyFontSize
+                    }
+
+                    Label {
+                        text: root.settingsStore.pageWidth + qsTr(" px")
+                        color: Theme.textColor
+                        font.family: Theme.uiFontFamily
+                        font.pixelSize: Theme.captionFontSize
+                        font.weight: Font.Medium
+                    }
+                }
+
+                LeaflitSlider {
+                    Layout.fillWidth: true
+                    from: 560
+                    to: 1040
+                    stepSize: 20
+                    value: root.settingsStore.pageWidth
+                    onMoved: root.settingsStore.pageWidth = Math.round(value / 20) * 20
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spaceXs
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Scroll speed")
+                        color: Theme.mutedTextColor
+                        font.family: Theme.uiFontFamily
+                        font.pixelSize: Theme.bodyFontSize
+                    }
+
+                    Label {
+                        text: qsTr("%1%").arg(root.settingsStore.scrollSpeed)
+                        color: Theme.textColor
+                        font.family: Theme.uiFontFamily
+                        font.pixelSize: Theme.captionFontSize
+                        font.weight: Font.Medium
+                    }
+                }
+
+                LeaflitSlider {
+                    Layout.fillWidth: true
+                    from: 50
+                    to: 200
+                    stepSize: 10
+                    value: root.settingsStore.scrollSpeed
+                    onMoved: root.settingsStore.scrollSpeed = Math.round(value / 10) * 10
+                }
+            }
+
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spaceXs
 
                 Label {
-                    Layout.fillWidth: true
-                    text: qsTr("Scroll speed")
+                    text: qsTr("Theme")
                     color: Theme.mutedTextColor
                     font.family: Theme.uiFontFamily
                     font.pixelSize: Theme.bodyFontSize
                 }
 
-                Label {
-                    text: qsTr("%1%").arg(root.settingsStore.scrollSpeed)
-                    color: Theme.textColor
-                    font.family: Theme.uiFontFamily
-                    font.pixelSize: Theme.captionFontSize
-                    font.weight: Font.Medium
+                LeaflitSegmentedControl {
+                    Layout.fillWidth: true
+                    model: root.themeOptions
+                    value: root.settingsStore.colorTheme
+                    onValueSelected: value => root.settingsStore.colorTheme = value
                 }
             }
 
-            LeaflitSlider {
+            LeaflitButton {
                 Layout.fillWidth: true
-                from: 50
-                to: 200
-                stepSize: 10
-                value: root.settingsStore.scrollSpeed
-                onMoved: root.settingsStore.scrollSpeed = Math.round(value / 10) * 10
+                text: qsTr("Restore defaults")
+                variant: "secondary"
+                onClicked: root.settingsStore.resetReadingPreferences()
             }
-        }
-
-        LeaflitSwitch {
-            Layout.fillWidth: true
-            text: qsTr("Dark theme")
-            checked: root.settingsStore.darkMode
-            onToggled: root.settingsStore.darkMode = checked
         }
     }
 

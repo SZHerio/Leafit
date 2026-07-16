@@ -8,6 +8,7 @@ Item {
     required property var documentFormatter
 
     readonly property int textFontSize: settingsStore.textFontSize
+    readonly property string textFontFamily: Theme.readingFontFamilyFor(settingsStore.readingFont)
     readonly property int preferredPageWidth: settingsStore.pageWidth
     readonly property real lineHeight: settingsStore.lineHeight
     readonly property url activeDocumentUrl: readerController.sourceUrl
@@ -258,6 +259,7 @@ Item {
         visible: root.showingText
         documentText: root.readerController.text
         documentFormatter: root.documentFormatter
+        fontFamily: root.textFontFamily
         fontSize: root.textFontSize
         lineHeight: root.lineHeight
         preferredPageWidth: root.preferredPageWidth

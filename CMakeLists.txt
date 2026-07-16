@@ -52,6 +52,7 @@ qt_add_qml_module(appLeaflit
         ui/LeaflitIconButton.qml
         ui/LeaflitProgressBar.qml
         ui/LeaflitScrollBar.qml
+        ui/LeaflitSegmentedControl.qml
         ui/LeaflitSlider.qml
         ui/LeaflitSurface.qml
         ui/LeaflitSwitch.qml

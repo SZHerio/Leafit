@@ -45,8 +45,8 @@ ApplicationWindow {
 
     Binding {
         target: Theme
-        property: "darkMode"
-        value: root.localStateStore.darkMode
+        property: "colorTheme"
+        value: root.localStateStore.colorTheme
     }
 
     FileDialog {

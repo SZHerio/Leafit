@@ -11,6 +11,8 @@ class LocalStateStore final : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(bool darkMode READ darkMode WRITE setDarkMode NOTIFY darkModeChanged)
+    Q_PROPERTY(QString colorTheme READ colorTheme WRITE setColorTheme NOTIFY colorThemeChanged)
+    Q_PROPERTY(QString readingFont READ readingFont WRITE setReadingFont NOTIFY readingFontChanged)
     Q_PROPERTY(int textFontSize READ textFontSize WRITE setTextFontSize NOTIFY textFontSizeChanged)
     Q_PROPERTY(qreal lineHeight READ lineHeight WRITE setLineHeight NOTIFY lineHeightChanged)
     Q_PROPERTY(int pageWidth READ pageWidth WRITE setPageWidth NOTIFY pageWidthChanged)
@@ -22,6 +24,8 @@ public:
     explicit LocalStateStore(const QString &settingsFilePath, QObject *parent = nullptr);
 
     bool darkMode() const;
+    QString colorTheme() const;
+    QString readingFont() const;
     int textFontSize() const;
     qreal lineHeight() const;
     int pageWidth() const;
@@ -29,6 +33,8 @@ public:
     QUrl lastBookUrl() const;
 
     void setDarkMode(bool darkMode);
+    void setColorTheme(const QString &colorTheme);
+    void setReadingFont(const QString &readingFont);
     void setTextFontSize(int textFontSize);
     void setLineHeight(qreal lineHeight);
     void setPageWidth(int pageWidth);
@@ -43,6 +49,7 @@ public:
                                      int page,
                                      qreal scale,
                                      qreal progress);
+    Q_INVOKABLE void resetReadingPreferences();
     Q_INVOKABLE void sync();
 
     QVector<LibraryBook> libraryBooks() const;
@@ -53,6 +60,8 @@ public:
 
 signals:
     void darkModeChanged();
+    void colorThemeChanged();
+    void readingFontChanged();
     void textFontSizeChanged();
     void lineHeightChanged();
     void pageWidthChanged();
@@ -68,7 +77,8 @@ private:
     void rememberDocumentUrl(const QUrl &documentUrl);
 
     mutable QSettings m_settings;
-    bool m_darkMode = false;
+    QString m_colorTheme = QStringLiteral("light");
+    QString m_readingFont = QStringLiteral("serif");
     int m_textFontSize = 18;
     qreal m_lineHeight = 1.5;
     int m_pageWidth = 820;

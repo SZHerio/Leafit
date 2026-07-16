@@ -23,6 +23,9 @@ constexpr int legacyNormalWheelScrollLines = 6;
 constexpr qreal minimumPdfScale = 0.4;
 constexpr qreal maximumPdfScale = 3.0;
 
+const QString defaultColorTheme = QStringLiteral("light");
+const QString defaultReadingFont = QStringLiteral("serif");
+
 QString serializedUrl(const QUrl &url)
 {
     return url.toString(QUrl::FullyEncoded);
@@ -32,6 +35,28 @@ int normalizedScrollSpeed(int scrollSpeed)
 {
     const int steppedSpeed = qRound(scrollSpeed / qreal(scrollSpeedStep)) * scrollSpeedStep;
     return qBound(minimumScrollSpeed, steppedSpeed, maximumScrollSpeed);
+}
+
+QString normalizedColorTheme(const QString &colorTheme)
+{
+    const QString normalized = colorTheme.trimmed().toLower();
+    static const QStringList supportedThemes = {
+        QStringLiteral("light"),
+        QStringLiteral("sepia"),
+        QStringLiteral("dark")
+    };
+    return supportedThemes.contains(normalized) ? normalized : defaultColorTheme;
+}
+
+QString normalizedReadingFont(const QString &readingFont)
+{
+    const QString normalized = readingFont.trimmed().toLower();
+    static const QStringList supportedFonts = {
+        QStringLiteral("serif"),
+        QStringLiteral("sans"),
+        QStringLiteral("mono")
+    };
+    return supportedFonts.contains(normalized) ? normalized : defaultReadingFont;
 }
 
 } // namespace
@@ -45,7 +70,19 @@ LocalStateStore::LocalStateStore(const QString &settingsFilePath, QObject *paren
     : QObject(parent)
     , m_settings(settingsFilePath, QSettings::IniFormat)
 {
-    m_darkMode = m_settings.value(QStringLiteral("appearance/darkMode"), false).toBool();
+    const QString colorThemeKey = QStringLiteral("appearance/colorTheme");
+    const QString legacyDarkModeKey = QStringLiteral("appearance/darkMode");
+    if (m_settings.contains(colorThemeKey)) {
+        m_colorTheme = normalizedColorTheme(m_settings.value(colorThemeKey).toString());
+    } else if (m_settings.contains(legacyDarkModeKey)) {
+        m_colorTheme = m_settings.value(legacyDarkModeKey).toBool()
+                           ? QStringLiteral("dark")
+                           : defaultColorTheme;
+        m_settings.setValue(colorThemeKey, m_colorTheme);
+    }
+    m_settings.remove(legacyDarkModeKey);
+    m_readingFont = normalizedReadingFont(
+        m_settings.value(QStringLiteral("reading/font"), defaultReadingFont).toString());
     m_textFontSize = qBound(minimumFontSize,
                             m_settings.value(QStringLiteral("reading/fontSize"), 18).toInt(),
                             maximumFontSize);
@@ -71,7 +108,17 @@ LocalStateStore::LocalStateStore(const QString &settingsFilePath, QObject *paren
 
 bool LocalStateStore::darkMode() const
 {
-    return m_darkMode;
+    return m_colorTheme == QLatin1String("dark");
+}
+
+QString LocalStateStore::colorTheme() const
+{
+    return m_colorTheme;
+}
+
+QString LocalStateStore::readingFont() const
+{
+    return m_readingFont;
 }
 
 int LocalStateStore::textFontSize() const
@@ -101,13 +148,35 @@ QUrl LocalStateStore::lastBookUrl() const
 
 void LocalStateStore::setDarkMode(bool darkMode)
 {
-    if (m_darkMode == darkMode) {
+    setColorTheme(darkMode ? QStringLiteral("dark") : defaultColorTheme);
+}
+
+void LocalStateStore::setColorTheme(const QString &colorTheme)
+{
+    const QString normalizedTheme = normalizedColorTheme(colorTheme);
+    if (m_colorTheme == normalizedTheme) {
         return;
     }
 
-    m_darkMode = darkMode;
-    m_settings.setValue(QStringLiteral("appearance/darkMode"), darkMode);
-    emit darkModeChanged();
+    const bool wasDark = darkMode();
+    m_colorTheme = normalizedTheme;
+    m_settings.setValue(QStringLiteral("appearance/colorTheme"), normalizedTheme);
+    emit colorThemeChanged();
+    if (wasDark != darkMode()) {
+        emit darkModeChanged();
+    }
+}
+
+void LocalStateStore::setReadingFont(const QString &readingFont)
+{
+    const QString normalizedFont = normalizedReadingFont(readingFont);
+    if (m_readingFont == normalizedFont) {
+        return;
+    }
+
+    m_readingFont = normalizedFont;
+    m_settings.setValue(QStringLiteral("reading/font"), normalizedFont);
+    emit readingFontChanged();
 }
 
 void LocalStateStore::setTextFontSize(int textFontSize)
@@ -221,6 +290,16 @@ void LocalStateStore::savePdfPosition(const QUrl &documentUrl,
     progress = qBound(qreal(0), progress, qreal(1));
     m_settings.setValue(documentKey(documentUrl, QStringLiteral("readingProgress")), progress);
     emit documentProgressChanged(documentUrl, progress);
+}
+
+void LocalStateStore::resetReadingPreferences()
+{
+    setColorTheme(defaultColorTheme);
+    setReadingFont(defaultReadingFont);
+    setTextFontSize(18);
+    setLineHeight(1.5);
+    setPageWidth(820);
+    setScrollSpeed(100);
 }
 
 QVector<LibraryBook> LocalStateStore::libraryBooks() const
