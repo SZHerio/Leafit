@@ -22,6 +22,14 @@ Item {
 
     activeFocusOnTab: true
     opacity: fileAvailable ? 1 : 0.68
+    scale: cardMouseArea.containsMouse && root.fileAvailable ? 1.008 : 1
+
+    Behavior on scale {
+        NumberAnimation {
+            duration: Theme.motionFast
+            easing.type: Easing.OutCubic
+        }
+    }
 
     Keys.onReturnPressed: if (root.fileAvailable) root.openRequested(root.sourceUrl)
     Keys.onEnterPressed: if (root.fileAvailable) root.openRequested(root.sourceUrl)

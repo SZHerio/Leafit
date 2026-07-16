@@ -10,6 +10,7 @@ Rectangle {
     required property var settingsStore
     property bool darkMode: false
     property bool showingLibrary: false
+    readonly property bool compactMode: width < 1080
 
     signal openRequested
     signal libraryRequested
@@ -20,15 +21,14 @@ Rectangle {
         annotationsPopup.close()
         readingSettings.close()
         chapterNavigation.close()
+        readerTools.close()
     }
 
     function openSearch() {
         if (root.showingLibrary || !root.readerWorkspace.hasDocument) {
             return
         }
-        annotationsPopup.close()
-        readingSettings.close()
-        chapterNavigation.close()
+        root.closeReaderPopups()
         searchPopup.openAndFocus()
     }
 
@@ -36,11 +36,33 @@ Rectangle {
         if (root.showingLibrary || !root.readerWorkspace.hasDocument) {
             return
         }
-        searchPopup.close()
-        readingSettings.close()
-        chapterNavigation.close()
+        root.closeReaderPopups()
         annotationsPopup.activeTab = tab === "highlights" ? "highlights" : "bookmarks"
         annotationsPopup.open()
+    }
+
+    function toggleChapterNavigation() {
+        const wasOpen = chapterNavigation.opened
+        root.closeReaderPopups()
+        if (!wasOpen && root.readerWorkspace.hasChapters) {
+            chapterNavigation.open()
+        }
+    }
+
+    function toggleReadingSettings() {
+        const wasOpen = readingSettings.opened
+        root.closeReaderPopups()
+        if (!wasOpen) {
+            readingSettings.open()
+        }
+    }
+
+    function toggleReaderTools() {
+        const wasOpen = readerTools.opened
+        root.closeReaderPopups()
+        if (!wasOpen) {
+            readerTools.open()
+        }
     }
 
     implicitHeight: Theme.toolbarHeight
@@ -81,7 +103,7 @@ Rectangle {
         spacing: Theme.spaceSm
 
         SZHBrandLogo {
-            iconOnly: root.width < 940
+            iconOnly: root.width < 1080
             darkVariant: Theme.darkMode
             Layout.preferredWidth: iconOnly ? 42 : 176
             Layout.preferredHeight: 42
@@ -97,9 +119,13 @@ Rectangle {
         }
 
         SZHButton {
+            visible: root.showingLibrary || !root.compactMode
             text: root.showingLibrary ? qsTr("Add book") : qsTr("Open book")
             variant: "chrome"
-            onClicked: root.openRequested()
+            onClicked: {
+                root.closeReaderPopups()
+                root.openRequested()
+            }
         }
 
         Label {
@@ -121,7 +147,9 @@ Rectangle {
         }
 
         Rectangle {
-            visible: !root.showingLibrary && root.readerWorkspace.hasDocument
+            visible: !root.compactMode
+                     && !root.showingLibrary
+                     && root.readerWorkspace.hasDocument
             Layout.preferredWidth: 1
             Layout.preferredHeight: 24
             Layout.leftMargin: Theme.spaceXs
@@ -135,7 +163,7 @@ Rectangle {
             visible: !root.showingLibrary && root.readerWorkspace.hasDocument
             symbol: "\u2315"
             symbolPixelSize: Theme.bodyLargeFontSize
-            toolTip: qsTr("Search in book")
+            toolTip: qsTr("Search in book (Ctrl+F)")
             onChrome: true
             selected: searchPopup.opened
             onClicked: searchPopup.opened ? searchPopup.close() : root.openSearch()
@@ -146,8 +174,8 @@ Rectangle {
             symbol: root.readerWorkspace.currentLocationBookmarked ? "\u2605" : "\u2606"
             symbolPixelSize: Theme.bodyLargeFontSize
             toolTip: root.readerWorkspace.currentLocationBookmarked
-                     ? qsTr("Remove bookmark")
-                     : qsTr("Add bookmark")
+                     ? qsTr("Remove bookmark (Ctrl+B)")
+                     : qsTr("Add bookmark (Ctrl+B)")
             onChrome: true
             selected: root.readerWorkspace.currentLocationBookmarked
             onClicked: root.readerWorkspace.toggleCurrentBookmark()
@@ -167,7 +195,9 @@ Rectangle {
         }
 
         SZHIconButton {
-            visible: !root.showingLibrary && root.readerWorkspace.hasDocument
+            visible: !root.compactMode
+                     && !root.showingLibrary
+                     && root.readerWorkspace.hasDocument
             symbol: "-"
             toolTip: root.readerWorkspace.showingPdf
                          ? qsTr("Zoom out")
@@ -178,7 +208,9 @@ Rectangle {
         }
 
         Label {
-            visible: !root.showingLibrary && root.readerWorkspace.hasDocument
+            visible: !root.compactMode
+                     && !root.showingLibrary
+                     && root.readerWorkspace.hasDocument
             text: root.readerWorkspace.scaleLabel
             color: Theme.chromeMutedTextColor
             font.family: Theme.uiFontFamily
@@ -189,7 +221,9 @@ Rectangle {
         }
 
         SZHIconButton {
-            visible: !root.showingLibrary && root.readerWorkspace.hasDocument
+            visible: !root.compactMode
+                     && !root.showingLibrary
+                     && root.readerWorkspace.hasDocument
             symbol: "+"
             toolTip: root.readerWorkspace.showingPdf
                          ? qsTr("Zoom in")
@@ -200,7 +234,9 @@ Rectangle {
         }
 
         SZHIconButton {
-            visible: !root.showingLibrary && root.readerWorkspace.showingPdf
+            visible: !root.compactMode
+                     && !root.showingLibrary
+                     && root.readerWorkspace.showingPdf
             symbol: "\u2922"
             toolTip: qsTr("Fit page to width")
             onChrome: true
@@ -210,42 +246,44 @@ Rectangle {
         SZHIconButton {
             id: chapterButton
 
-            visible: !root.showingLibrary && root.readerWorkspace.hasChapters
+            visible: !root.compactMode
+                     && !root.showingLibrary
+                     && root.readerWorkspace.hasChapters
             symbol: "\u2630"
             toolTip: qsTr("Chapters")
             onChrome: true
             selected: chapterNavigation.opened
-            onClicked: {
-                searchPopup.close()
-                annotationsPopup.close()
-                readingSettings.close()
-                chapterNavigation.opened
-                    ? chapterNavigation.close()
-                    : chapterNavigation.open()
-            }
+            onClicked: root.toggleChapterNavigation()
         }
 
         SZHIconButton {
-            visible: !root.showingLibrary
+            visible: !root.compactMode && !root.showingLibrary
             symbol: "\u2699"
             symbolPixelSize: Theme.bodyLargeFontSize
             toolTip: qsTr("Reading settings")
             onChrome: true
             selected: readingSettings.opened
-            onClicked: {
-                searchPopup.close()
-                annotationsPopup.close()
-                chapterNavigation.close()
-                readingSettings.opened
-                    ? readingSettings.close()
-                    : readingSettings.open()
-            }
+            onClicked: root.toggleReadingSettings()
+        }
+
+        SZHIconButton {
+            id: overflowButton
+
+            visible: root.compactMode && !root.showingLibrary
+            symbol: "\u22ef"
+            symbolPixelSize: Theme.titleFontSize
+            toolTip: qsTr("Reader tools")
+            onChrome: true
+            selected: readerTools.opened
+            onClicked: root.toggleReaderTools()
         }
 
         SZHIconButton {
             symbol: root.darkMode ? "\u2600" : "\u263e"
             symbolPixelSize: Theme.bodyLargeFontSize
-            toolTip: root.darkMode ? qsTr("Use light theme") : qsTr("Use dark theme")
+            toolTip: root.darkMode
+                     ? qsTr("Use light theme (Ctrl+Shift+D)")
+                     : qsTr("Use dark theme (Ctrl+Shift+D)")
             onChrome: true
             onClicked: root.darkModeToggled(!root.darkMode)
         }
@@ -300,6 +338,27 @@ Rectangle {
         }
     }
 
+    ReaderToolsPopup {
+        id: readerTools
+
+        parent: root
+        x: Math.max(Theme.spaceMd, root.width - width - Theme.spaceLg)
+        y: root.height + Theme.spaceXs
+        readerWorkspace: root.readerWorkspace
+        onAboutToShow: {
+            const buttonPosition = overflowButton.mapToItem(root, 0, 0)
+            x = Math.max(Theme.spaceMd,
+                         Math.min(root.width - width - Theme.spaceMd,
+                                  buttonPosition.x + overflowButton.width - width))
+        }
+        onOpenRequested: {
+            root.closeReaderPopups()
+            root.openRequested()
+        }
+        onChaptersRequested: root.toggleChapterNavigation()
+        onSettingsRequested: root.toggleReadingSettings()
+    }
+
     ChapterNavigationPopup {
         id: chapterNavigation
 
@@ -308,9 +367,11 @@ Rectangle {
         y: root.height + Theme.spaceXs
         readerWorkspace: root.readerWorkspace
         onAboutToShow: {
-            const buttonPosition = chapterButton.mapToItem(root, 0, 0)
+            const anchorButton = chapterButton.visible ? chapterButton : overflowButton
+            const buttonPosition = anchorButton.mapToItem(root, 0, 0)
             x = Math.max(Theme.spaceMd,
-                         buttonPosition.x + chapterButton.width - width)
+                         Math.min(root.width - width - Theme.spaceMd,
+                                  buttonPosition.x + anchorButton.width - width))
         }
     }
 }

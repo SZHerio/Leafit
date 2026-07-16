@@ -8,7 +8,6 @@ Item {
     id: root
 
     required property var libraryModel
-    required property string errorMessage
 
     signal addRequested
     signal openRequested(url sourceUrl)
@@ -61,7 +60,12 @@ Item {
         }
 
         SZHTextField {
-            Layout.preferredWidth: root.width < 900 ? 220 : 300
+            Layout.preferredWidth: root.width < 800
+                                   ? 180
+                                   : root.width < 900
+                                     ? 220
+                                     : 300
+            Layout.minimumWidth: 160
             placeholderText: qsTr("Search library")
             text: root.libraryModel.filterText
             onTextEdited: root.libraryModel.filterText = text
@@ -74,28 +78,13 @@ Item {
         }
     }
 
-    Label {
-        id: errorLabel
-
-        anchors.top: libraryToolbar.bottom
-        anchors.left: libraryToolbar.left
-        anchors.right: libraryToolbar.right
-        anchors.topMargin: Theme.spaceSm
-        visible: root.errorMessage.length > 0
-        text: root.errorMessage
-        color: Theme.dangerColor
-        font.family: Theme.uiFontFamily
-        font.pixelSize: Theme.captionFontSize
-        elide: Text.ElideRight
-    }
-
     GridView {
         id: bookGrid
 
         readonly property real availableGridWidth: Math.max(1, width - leftMargin - rightMargin)
         readonly property int columnCount: Math.max(1, Math.floor(availableGridWidth / 188))
 
-        anchors.top: errorLabel.visible ? errorLabel.bottom : libraryToolbar.bottom
+        anchors.top: libraryToolbar.bottom
         anchors.left: parent.left
         anchors.right: parent.right
         anchors.bottom: parent.bottom
@@ -244,6 +233,14 @@ Item {
         visible: root.libraryModel.totalCount === 0
         spacing: Theme.spaceMd
 
+        SZHBrandLogo {
+            Layout.alignment: Qt.AlignHCenter
+            Layout.preferredWidth: 76
+            Layout.preferredHeight: 76
+            iconOnly: true
+            darkVariant: Theme.darkMode
+        }
+
         Label {
             Layout.alignment: Qt.AlignHCenter
             text: qsTr("Your library is empty")
@@ -261,12 +258,24 @@ Item {
         }
     }
 
-    Label {
+    ColumnLayout {
         anchors.centerIn: parent
         visible: root.libraryModel.totalCount > 0 && root.libraryModel.count === 0
-        text: qsTr("No books found")
-        color: Theme.mutedTextColor
-        font.family: Theme.uiFontFamily
-        font.pixelSize: Theme.bodyLargeFontSize
+        spacing: Theme.spaceMd
+
+        Label {
+            Layout.alignment: Qt.AlignHCenter
+            text: qsTr("No books found")
+            color: Theme.mutedTextColor
+            font.family: Theme.uiFontFamily
+            font.pixelSize: Theme.bodyLargeFontSize
+        }
+
+        SZHButton {
+            Layout.alignment: Qt.AlignHCenter
+            variant: "secondary"
+            text: qsTr("Clear search")
+            onClicked: root.libraryModel.filterText = ""
+        }
     }
 }

@@ -40,6 +40,10 @@ ApplicationWindow {
         root.showingLibrary = true
     }
 
+    function toggleColorTheme() {
+        root.localStateStore.darkMode = !root.localStateStore.darkMode
+    }
+
     onClosing: {
         readerWorkspace.flushReadingState()
         root.localStateStore.sync()
@@ -49,6 +53,46 @@ ApplicationWindow {
         target: Theme
         property: "colorTheme"
         value: root.localStateStore.colorTheme
+    }
+
+    Shortcut {
+        sequence: StandardKey.Open
+        onActivated: openDialog.open()
+    }
+
+    Shortcut {
+        enabled: !root.showingLibrary && readerWorkspace.hasDocument
+        sequence: StandardKey.Find
+        onActivated: appHeader.openSearch()
+    }
+
+    Shortcut {
+        enabled: !root.showingLibrary && readerWorkspace.hasDocument
+        sequence: StandardKey.ZoomIn
+        onActivated: readerWorkspace.increaseScale()
+    }
+
+    Shortcut {
+        enabled: !root.showingLibrary && readerWorkspace.hasDocument
+        sequence: StandardKey.ZoomOut
+        onActivated: readerWorkspace.decreaseScale()
+    }
+
+    Shortcut {
+        enabled: !root.showingLibrary && readerWorkspace.hasDocument
+        sequence: "Ctrl+B"
+        onActivated: readerWorkspace.toggleCurrentBookmark()
+    }
+
+    Shortcut {
+        enabled: !root.showingLibrary && readerWorkspace.hasDocument
+        sequence: "Ctrl+Shift+H"
+        onActivated: appHeader.openAnnotations("highlights")
+    }
+
+    Shortcut {
+        sequence: "Ctrl+Shift+D"
+        onActivated: root.toggleColorTheme()
     }
 
     FileDialog {
@@ -68,6 +112,7 @@ ApplicationWindow {
 
     header: AppHeader {
         id: appHeader
+        objectName: "appHeader"
 
         readerController: root.readerController
         readerWorkspace: readerWorkspace
@@ -87,23 +132,52 @@ ApplicationWindow {
 
     ReaderWorkspace {
         id: readerWorkspace
+        objectName: "readerWorkspace"
 
         anchors.fill: parent
         visible: !root.showingLibrary
+        opacity: root.showingLibrary ? 0 : 1
         readerController: root.readerController
         settingsStore: root.localStateStore
         documentFormatter: root.readingDocumentFormatter
         searchController: root.readingSearchController
         annotationStore: root.readingAnnotationStore
         onOpenRequested: openDialog.open()
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.motionNormal
+            }
+        }
     }
 
     LibraryView {
         anchors.fill: parent
         visible: root.showingLibrary
+        opacity: root.showingLibrary ? 1 : 0
         libraryModel: root.libraryModel
-        errorMessage: root.readerController.errorMessage
         onAddRequested: openDialog.open()
         onOpenRequested: sourceUrl => root.openBook(sourceUrl)
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.motionNormal
+            }
+        }
+    }
+
+    SZHNotification {
+        z: 100
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: Theme.spaceMd
+        anchors.rightMargin: Theme.spaceMd
+        width: Math.min(480, Math.max(320, root.width - Theme.spaceXl))
+        shown: root.readerController.errorMessage.length > 0
+        heading: qsTr("Could not open book")
+        message: root.readerController.errorMessage
+        actionText: qsTr("Choose another")
+        onActionRequested: openDialog.open()
+        onDismissed: root.readerController.clearError()
     }
 }

@@ -61,7 +61,10 @@ Popup {
     width: Math.min(396,
                     Math.max(320,
                              (parent ? parent.width : 428) - Theme.spaceXl))
-    height: Math.min(500, maximumPanelHeight)
+    height: Math.min(root.activeModel.length === 0 && !root.composingHighlight
+                     ? 360
+                     : 500,
+                     maximumPanelHeight)
     padding: Theme.spaceMd
     modal: false
     focus: true
@@ -181,7 +184,7 @@ Popup {
         Label {
             visible: root.activeTab === "highlights" && !root.composingHighlight
             Layout.fillWidth: true
-            text: qsTr("Select text in the book to create a highlight or note.")
+            text: qsTr("No active text selection")
             color: Theme.mutedTextColor
             font.family: Theme.uiFontFamily
             font.pixelSize: Theme.captionFontSize

@@ -76,11 +76,13 @@ qt_add_qml_module(appSZHBooks
         reader/TextNavigationControl.qml
         reader/TextDocumentView.qml
         shell/AppHeader.qml
+        shell/ReaderToolsPopup.qml
         shell/ReadingSettingsPopup.qml
         shell/ReaderStatusBar.qml
         ui/SZHBrandLogo.qml
         ui/SZHButton.qml
         ui/SZHIconButton.qml
+        ui/SZHNotification.qml
         ui/SZHProgressBar.qml
         ui/SZHScrollBar.qml
         ui/SZHSegmentedControl.qml

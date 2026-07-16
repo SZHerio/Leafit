@@ -9,7 +9,6 @@ Rectangle {
     required property var readerWorkspace
 
     readonly property bool showProgress: readerController.hasDocument
-                                                 && readerController.errorMessage.length === 0
 
     implicitHeight: Theme.statusBarHeight
     color: Theme.surfaceColor
@@ -39,16 +38,12 @@ Rectangle {
 
         Label {
             Layout.fillWidth: true
-            text: root.readerController.errorMessage.length > 0
-                      ? root.readerController.errorMessage
-                      : root.readerWorkspace.currentChapterTitle.length > 0
+            text: root.readerWorkspace.currentChapterTitle.length > 0
                         ? root.readerWorkspace.currentChapterTitle
                         : root.readerController.sourcePath.length > 0
                           ? root.readerController.sourcePath
                           : qsTr("No file open")
-            color: root.readerController.errorMessage.length > 0
-                       ? Theme.dangerColor
-                       : Theme.mutedTextColor
+            color: Theme.mutedTextColor
             font.family: Theme.uiFontFamily
             font.pixelSize: Theme.captionFontSize
             elide: Text.ElideMiddle
