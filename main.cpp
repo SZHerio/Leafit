@@ -1,4 +1,5 @@
 #include <QGuiApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQuickStyle>
 #include <QStyleHints>
@@ -32,6 +33,8 @@ int main(int argc, char *argv[])
     QCoreApplication::setApplicationName(QStringLiteral("SZHBooks"));
 
     QGuiApplication app(argc, argv);
+    app.setWindowIcon(QIcon(QStringLiteral(
+        ":/qt/qml/SZHBooks/assets/branding/szhbooks-icon.png")));
 
     LocalStateStore localState;
     const auto applyScrollSpeed = [&app, &localState]() {

@@ -1,9 +1,15 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(SZHBooks VERSION 0.1 LANGUAGES C CXX)
+project(SZHBooks VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+include(GNUInstallDirs)
+
+if(WIN32)
+    set(CMAKE_INSTALL_BINDIR ".")
+endif()
 
 find_package(Qt6 REQUIRED COMPONENTS Gui Pdf PdfQuick Quick QuickControls2 QuickDialogs2 Xml)
 
@@ -93,6 +99,7 @@ qt_add_qml_module(appSZHBooks
         ui/SZHTextField.qml
         ui/Theme.qml
     RESOURCES
+        assets/branding/szhbooks-icon.png
         assets/branding/szhbooks-logo-sheet.png
 )
 
@@ -108,6 +115,18 @@ set_target_properties(appSZHBooks PROPERTIES
     WIN32_EXECUTABLE TRUE
 )
 
+if(WIN32)
+    enable_language(RC)
+    set(SZHBOOKS_WINDOWS_ICON
+        "${CMAKE_CURRENT_SOURCE_DIR}/assets/branding/szhbooks.ico")
+    configure_file(
+        packaging/windows/szhbooks.rc.in
+        ${CMAKE_CURRENT_BINARY_DIR}/szhbooks.rc
+        @ONLY
+    )
+    target_sources(appSZHBooks PRIVATE ${CMAKE_CURRENT_BINARY_DIR}/szhbooks.rc)
+endif()
+
 target_link_libraries(appSZHBooks
     PRIVATE
         szhbooks_miniz
@@ -120,12 +139,25 @@ target_link_libraries(appSZHBooks
         Qt6::Xml
 )
 
-include(GNUInstallDirs)
+if(WIN32)
+    set(SZHBOOKS_RUNTIME_INSTALL_DIR ".")
+else()
+    set(SZHBOOKS_RUNTIME_INSTALL_DIR "${CMAKE_INSTALL_BINDIR}")
+endif()
+
 install(TARGETS appSZHBooks
+    COMPONENT szhbooks
     BUNDLE DESTINATION .
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
-    RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
+    RUNTIME DESTINATION ${SZHBOOKS_RUNTIME_INSTALL_DIR}
 )
+
+qt_generate_deploy_qml_app_script(
+    TARGET appSZHBooks
+    OUTPUT_SCRIPT szhbooks_deploy_script
+    NO_UNSUPPORTED_PLATFORM_ERROR
+)
+install(SCRIPT ${szhbooks_deploy_script} COMPONENT szhbooks)
 
 include(CTest)
 
@@ -206,3 +238,51 @@ if(BUILD_TESTING)
         )
     endif()
 endif()
+
+set(CPACK_PACKAGE_NAME "SZHBooks")
+set(CPACK_PACKAGE_VENDOR "SZHerio")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "A calm, local-first desktop reader")
+set(CPACK_PACKAGE_VERSION ${PROJECT_VERSION})
+set(CPACK_PACKAGE_FILE_NAME "SZHBooks-${PROJECT_VERSION}-win64")
+set(CPACK_PACKAGE_INSTALL_DIRECTORY "SZHBooks")
+set(CPACK_GENERATOR "ZIP;IFW")
+
+set(CPACK_IFW_PACKAGE_TITLE "SZHBooks")
+set(CPACK_IFW_PACKAGE_PUBLISHER "SZHerio")
+set(CPACK_IFW_PRODUCT_URL "https://github.com/SZHerio/SZHBooks")
+set(CPACK_IFW_PACKAGE_ICON "${CMAKE_CURRENT_SOURCE_DIR}/assets/branding/szhbooks.ico")
+set(CPACK_IFW_PACKAGE_WINDOW_ICON "${CMAKE_CURRENT_SOURCE_DIR}/assets/branding/szhbooks-icon.png")
+set(CPACK_IFW_PACKAGE_WIZARD_STYLE "Modern")
+set(CPACK_IFW_PACKAGE_WIZARD_SHOW_PAGE_LIST OFF)
+set(CPACK_IFW_PACKAGE_START_MENU_DIRECTORY "SZHBooks")
+set(CPACK_IFW_TARGET_DIRECTORY "@ApplicationsDir@/SZHBooks")
+
+if(WIN32 AND NOT CPACK_IFW_ROOT)
+    set(CPACK_IFW_ROOT "C:/Qt/Tools/QtInstallerFramework/4.10")
+endif()
+
+if(CPACK_IFW_ROOT)
+    file(TO_CMAKE_PATH "${CPACK_IFW_ROOT}" CPACK_IFW_ROOT)
+endif()
+
+set(CPACK_COMPONENTS_ALL "szhbooks")
+
+include(CPackComponent)
+cpack_add_component(szhbooks
+    DISPLAY_NAME "SZHBooks"
+    DESCRIPTION "SZHBooks desktop reader"
+    REQUIRED
+)
+
+include(CPackIFW)
+cpack_ifw_configure_component(szhbooks
+    ESSENTIAL
+    FORCED_INSTALLATION
+    NAME "com.szhbooks.reader"
+    DISPLAY_NAME "SZHBooks"
+    DESCRIPTION "A calm, local-first desktop reader"
+    VERSION ${PROJECT_VERSION}
+    SCRIPT "${CMAKE_CURRENT_SOURCE_DIR}/packaging/installer/component.qs"
+)
+
+include(CPack)
