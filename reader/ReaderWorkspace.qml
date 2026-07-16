@@ -13,6 +13,9 @@ Item {
     readonly property string textFontFamily: Theme.readingFontFamilyFor(settingsStore.readingFont)
     readonly property int preferredPageWidth: settingsStore.pageWidth
     readonly property real lineHeight: settingsStore.lineHeight
+    readonly property int paragraphSpacing: settingsStore.paragraphSpacing
+    readonly property int firstLineIndent: settingsStore.firstLineIndent
+    readonly property string textAlignment: settingsStore.textAlignment
     readonly property url activeDocumentUrl: readerController.sourceUrl
     readonly property bool hasDocument: readerController.hasDocument
     readonly property bool showingText: readerController.textMode
@@ -70,10 +73,18 @@ Item {
                                                               readingProgress,
                                                               showingPdf ? currentPage : -1)
     readonly property int annotationCount: annotationStore.totalCount
+    readonly property bool sidebarOverlay: width < 980
+    readonly property string sidebarTab: readerSidebar.activeTab
+    readonly property bool sidebarTextInputActive: sidebarOpen
+                                                     && readerSidebar.noteEditorActive
+    readonly property bool selectionActionsVisible: canCreateHighlight
+                                                     && !(sidebarOpen
+                                                          && sidebarTab === "notes")
 
     property bool restoringReadingState: false
     property real scaleWheelAccumulator: 0
     property string searchQuery: ""
+    property bool sidebarOpen: false
 
     signal openRequested
 
@@ -158,6 +169,45 @@ Item {
         }
     }
 
+    function copySelection() {
+        if (root.showingText) {
+            textView.copySelection()
+        } else if (root.showingPdf) {
+            pdfView.copySelection()
+        }
+    }
+
+    function openSidebar(tab) {
+        if (!root.hasDocument) {
+            return
+        }
+        readerSidebar.activeTab = tab === "bookmarks" || tab === "notes"
+                                  ? tab : "contents"
+        root.sidebarOpen = true
+    }
+
+    function toggleSidebar(tab) {
+        const normalizedTab = tab === "bookmarks" || tab === "notes"
+                              ? tab : "contents"
+        if (root.sidebarOpen && readerSidebar.activeTab === normalizedTab) {
+            root.sidebarOpen = false
+        } else {
+            root.openSidebar(normalizedTab)
+        }
+    }
+
+    function closeSidebar() {
+        root.sidebarOpen = false
+    }
+
+    function beginSelectionNote() {
+        if (!root.canCreateHighlight) {
+            return
+        }
+        root.openSidebar("notes")
+        readerSidebar.focusSelectionNote()
+    }
+
     function goToAnnotation(annotation) {
         if (root.showingPdf && annotation.page >= 0) {
             root.goToPage(annotation.page)
@@ -227,6 +277,22 @@ Item {
 
     function nextPage() {
         root.goToPage(root.currentPage + 1)
+    }
+
+    function pageBackward() {
+        if (root.showingPdf) {
+            root.previousPage()
+        } else if (root.showingText) {
+            textView.scrollByPage(-1)
+        }
+    }
+
+    function pageForward() {
+        if (root.showingPdf) {
+            root.nextPage()
+        } else if (root.showingText) {
+            textView.scrollByPage(1)
+        }
     }
 
     function chapterIndexAt(progress) {
@@ -334,6 +400,7 @@ Item {
         function onDocumentOpening() {
             root.flushReadingState()
             root.searchQuery = ""
+            root.sidebarOpen = false
         }
 
         function onDocumentOpened() {
@@ -377,36 +444,120 @@ Item {
         }
     }
 
-    EmptyReaderView {
-        anchors.fill: parent
-        visible: !root.hasDocument
-        errorMessage: root.readerController.errorMessage
-        onOpenRequested: root.openRequested()
+    Item {
+        id: readerViewport
+
+        anchors.top: parent.top
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: root.selectionActionsVisible
+                              ? selectionActions.height + Theme.spaceLg * 2 : 0
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.rightMargin: root.sidebarOpen && !root.sidebarOverlay
+                             ? readerSidebar.width : 0
+
+        Behavior on anchors.rightMargin {
+            NumberAnimation {
+                duration: Theme.motionNormal
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        Behavior on anchors.bottomMargin {
+            NumberAnimation {
+                duration: Theme.motionFast
+                easing.type: Easing.OutCubic
+            }
+        }
+
+        EmptyReaderView {
+            anchors.fill: parent
+            visible: !root.hasDocument
+            errorMessage: root.readerController.errorMessage
+            onOpenRequested: root.openRequested()
+        }
+
+        TextDocumentView {
+            id: textView
+
+            anchors.fill: parent
+            visible: root.showingText
+            documentText: root.readerController.text
+            documentFormatter: root.documentFormatter
+            searchController: root.searchController
+            fontFamily: root.textFontFamily
+            fontSize: root.textFontSize
+            lineHeight: root.lineHeight
+            paragraphSpacing: root.paragraphSpacing
+            firstLineIndent: root.firstLineIndent
+            textAlignment: root.textAlignment
+            preferredPageWidth: root.preferredPageWidth
+            onReadingProgressChanged: root.scheduleReadingStateSave()
+        }
+
+        PdfDocumentView {
+            id: pdfView
+
+            anchors.fill: parent
+            visible: root.showingPdf
+            source: root.readerController.pdfSource
+            onReadingProgressChanged: root.scheduleReadingStateSave()
+            onRenderScaleChanged: root.scheduleReadingStateSave()
+        }
+
     }
 
-    TextDocumentView {
-        id: textView
+    SelectionActionBar {
+        id: selectionActions
 
-        anchors.fill: parent
-        visible: root.showingText
-        documentText: root.readerController.text
-        documentFormatter: root.documentFormatter
-        searchController: root.searchController
-        fontFamily: root.textFontFamily
-        fontSize: root.textFontSize
-        lineHeight: root.lineHeight
-        preferredPageWidth: root.preferredPageWidth
-        onReadingProgressChanged: root.scheduleReadingStateSave()
+        anchors.horizontalCenter: readerViewport.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Theme.spaceLg
+        z: 3
+        visible: root.selectionActionsVisible
+        opacity: visible ? 1 : 0
+        onCopyRequested: root.copySelection()
+        onHighlightRequested: root.addSelectionHighlight("")
+        onNoteRequested: root.beginSelectionNote()
+        onCloseRequested: root.clearSelection()
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.motionFast
+            }
+        }
     }
 
-    PdfDocumentView {
-        id: pdfView
-
+    Rectangle {
         anchors.fill: parent
-        visible: root.showingPdf
-        source: root.readerController.pdfSource
-        onReadingProgressChanged: root.scheduleReadingStateSave()
-        onRenderScaleChanged: root.scheduleReadingStateSave()
+        z: 4
+        visible: root.sidebarOpen && root.sidebarOverlay
+        color: Theme.darkMode ? "#99000000" : "#66000000"
+
+        MouseArea {
+            anchors.fill: parent
+            onClicked: root.closeSidebar()
+        }
+    }
+
+    ReaderSidebar {
+        id: readerSidebar
+
+        z: 5
+        y: 0
+        x: root.sidebarOpen ? root.width - width : root.width
+        width: Math.min(360, Math.max(320, root.width * 0.88))
+        height: root.height
+        readerWorkspace: root
+        annotationStore: root.annotationStore
+        onCloseRequested: root.closeSidebar()
+
+        Behavior on x {
+            NumberAnimation {
+                duration: Theme.motionNormal
+                easing.type: Easing.OutCubic
+            }
+        }
     }
 
     Item {

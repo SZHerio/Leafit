@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Dialogs
+import QtQuick.Window
 
 ApplicationWindow {
     id: root
@@ -13,7 +14,13 @@ ApplicationWindow {
     required property var readingAnnotationStore
 
     property bool showingLibrary: true
+    property bool focusMode: false
+    property int visibilityBeforeFocus: Window.Windowed
     property url relinkSourceUrl
+    readonly property bool readingNavigationEnabled: !root.showingLibrary
+                                                      && readerWorkspace.hasDocument
+                                                      && !appHeader.readerPopupOpen
+                                                      && !readerWorkspace.sidebarTextInputActive
     readonly property var supportedBookNameFilters: [
         qsTr("Supported books (*.txt *.fb2 *.epub *.pdf *.html *.htm *.md *.markdown *.docx)"),
         qsTr("Text files (*.txt *.md *.markdown *.html *.htm)"),
@@ -42,6 +49,7 @@ ApplicationWindow {
     }
 
     function showLibrary() {
+        root.exitFocusMode()
         readerWorkspace.flushReadingState()
         root.localStateStore.sync()
         root.libraryModel.refresh()
@@ -50,6 +58,36 @@ ApplicationWindow {
 
     function toggleColorTheme() {
         root.localStateStore.darkMode = !root.localStateStore.darkMode
+    }
+
+    function enterFocusMode() {
+        if (root.focusMode || root.showingLibrary || !readerWorkspace.hasDocument) {
+            return
+        }
+        root.visibilityBeforeFocus = root.visibility === Window.Maximized
+                                     ? Window.Maximized : Window.Windowed
+        root.focusMode = true
+        root.showFullScreen()
+    }
+
+    function exitFocusMode() {
+        if (!root.focusMode) {
+            return
+        }
+        root.focusMode = false
+        if (root.visibilityBeforeFocus === Window.Maximized) {
+            root.showMaximized()
+        } else {
+            root.showNormal()
+        }
+    }
+
+    function toggleFocusMode() {
+        if (root.focusMode) {
+            root.exitFocusMode()
+        } else {
+            root.enterFocusMode()
+        }
     }
 
     function locateBook(sourceUrl) {
@@ -109,6 +147,54 @@ ApplicationWindow {
         onActivated: root.toggleColorTheme()
     }
 
+    Shortcut {
+        enabled: !root.showingLibrary && readerWorkspace.hasDocument
+        sequence: "F11"
+        onActivated: root.toggleFocusMode()
+    }
+
+    Shortcut {
+        enabled: root.focusMode
+        sequence: "Esc"
+        onActivated: root.exitFocusMode()
+    }
+
+    Shortcut {
+        enabled: root.readingNavigationEnabled
+        sequence: "PgUp"
+        onActivated: readerWorkspace.pageBackward()
+    }
+
+    Shortcut {
+        enabled: root.readingNavigationEnabled
+        sequence: "PgDown"
+        onActivated: readerWorkspace.pageForward()
+    }
+
+    Shortcut {
+        enabled: root.readingNavigationEnabled
+        sequence: "Home"
+        onActivated: readerWorkspace.goToStart()
+    }
+
+    Shortcut {
+        enabled: root.readingNavigationEnabled
+        sequence: "End"
+        onActivated: readerWorkspace.goToEnd()
+    }
+
+    Shortcut {
+        enabled: root.readingNavigationEnabled
+        sequence: "Space"
+        onActivated: readerWorkspace.pageForward()
+    }
+
+    Shortcut {
+        enabled: root.readingNavigationEnabled
+        sequence: "Shift+Space"
+        onActivated: readerWorkspace.pageBackward()
+    }
+
     FileDialog {
         id: openDialog
 
@@ -139,15 +225,17 @@ ApplicationWindow {
         settingsStore: root.localStateStore
         darkMode: root.localStateStore.darkMode
         showingLibrary: root.showingLibrary
+        visible: !root.focusMode
         onOpenRequested: openDialog.open()
         onLibraryRequested: root.showLibrary()
         onDarkModeToggled: root.localStateStore.darkMode = darkMode
+        onFocusModeRequested: root.toggleFocusMode()
     }
 
     footer: ReaderStatusBar {
         readerController: root.readerController
         readerWorkspace: readerWorkspace
-        visible: !root.showingLibrary
+        visible: !root.showingLibrary && !root.focusMode
     }
 
     ReaderWorkspace {
@@ -183,6 +271,30 @@ ApplicationWindow {
         Behavior on opacity {
             NumberAnimation {
                 duration: Theme.motionNormal
+            }
+        }
+    }
+
+    SZHIconButton {
+        z: 90
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: Theme.spaceMd
+        anchors.rightMargin: Theme.spaceMd
+        visible: root.focusMode && !root.showingLibrary
+        opacity: focusExitHover.hovered || activeFocus ? 1 : 0.42
+        symbol: "\u26f6"
+        symbolPixelSize: Theme.bodyLargeFontSize
+        toolTip: qsTr("Exit focus mode (F11)")
+        onClicked: root.exitFocusMode()
+
+        HoverHandler {
+            id: focusExitHover
+        }
+
+        Behavior on opacity {
+            NumberAnimation {
+                duration: Theme.motionFast
             }
         }
     }

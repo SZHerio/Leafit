@@ -15,6 +15,9 @@ class LocalStateStore final : public QObject
     Q_PROPERTY(QString readingFont READ readingFont WRITE setReadingFont NOTIFY readingFontChanged)
     Q_PROPERTY(int textFontSize READ textFontSize WRITE setTextFontSize NOTIFY textFontSizeChanged)
     Q_PROPERTY(qreal lineHeight READ lineHeight WRITE setLineHeight NOTIFY lineHeightChanged)
+    Q_PROPERTY(int paragraphSpacing READ paragraphSpacing WRITE setParagraphSpacing NOTIFY paragraphSpacingChanged)
+    Q_PROPERTY(int firstLineIndent READ firstLineIndent WRITE setFirstLineIndent NOTIFY firstLineIndentChanged)
+    Q_PROPERTY(QString textAlignment READ textAlignment WRITE setTextAlignment NOTIFY textAlignmentChanged)
     Q_PROPERTY(int pageWidth READ pageWidth WRITE setPageWidth NOTIFY pageWidthChanged)
     Q_PROPERTY(int scrollSpeed READ scrollSpeed WRITE setScrollSpeed NOTIFY scrollSpeedChanged)
     Q_PROPERTY(QUrl lastBookUrl READ lastBookUrl WRITE setLastBookUrl NOTIFY lastBookUrlChanged)
@@ -28,6 +31,9 @@ public:
     QString readingFont() const;
     int textFontSize() const;
     qreal lineHeight() const;
+    int paragraphSpacing() const;
+    int firstLineIndent() const;
+    QString textAlignment() const;
     int pageWidth() const;
     int scrollSpeed() const;
     QUrl lastBookUrl() const;
@@ -40,6 +46,9 @@ public:
     void setReadingFont(const QString &readingFont);
     void setTextFontSize(int textFontSize);
     void setLineHeight(qreal lineHeight);
+    void setParagraphSpacing(int paragraphSpacing);
+    void setFirstLineIndent(int firstLineIndent);
+    void setTextAlignment(const QString &textAlignment);
     void setPageWidth(int pageWidth);
     void setScrollSpeed(int scrollSpeed);
     void setLastBookUrl(const QUrl &lastBookUrl);
@@ -78,6 +87,9 @@ signals:
     void readingFontChanged();
     void textFontSizeChanged();
     void lineHeightChanged();
+    void paragraphSpacingChanged();
+    void firstLineIndentChanged();
+    void textAlignmentChanged();
     void pageWidthChanged();
     void scrollSpeedChanged();
     void lastBookUrlChanged();
@@ -94,6 +106,9 @@ private:
     QString m_readingFont = QStringLiteral("serif");
     int m_textFontSize = 18;
     qreal m_lineHeight = 1.5;
+    int m_paragraphSpacing = 10;
+    int m_firstLineIndent = 24;
+    QString m_textAlignment = QStringLiteral("justify");
     int m_pageWidth = 820;
     int m_scrollSpeed = 100;
     QUrl m_lastBookUrl;

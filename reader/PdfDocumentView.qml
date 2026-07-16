@@ -62,6 +62,12 @@ Item {
         pdfViewer.selectedText = ""
     }
 
+    function copySelection() {
+        if (pdfViewer.selectedText.length > 0) {
+            pdfViewer.copySelectionToClipboard()
+        }
+    }
+
     function nextSearchResult() {
         if (root.searchResultCount <= 0) {
             return

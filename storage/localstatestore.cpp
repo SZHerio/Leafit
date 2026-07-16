@@ -18,6 +18,10 @@ constexpr int minimumFontSize = 12;
 constexpr int maximumFontSize = 36;
 constexpr qreal minimumLineHeight = 1.2;
 constexpr qreal maximumLineHeight = 2.0;
+constexpr int minimumParagraphSpacing = 0;
+constexpr int maximumParagraphSpacing = 32;
+constexpr int minimumFirstLineIndent = 0;
+constexpr int maximumFirstLineIndent = 64;
 constexpr int minimumPageWidth = 560;
 constexpr int maximumPageWidth = 1040;
 constexpr int minimumScrollSpeed = 50;
@@ -29,6 +33,7 @@ constexpr qreal maximumPdfScale = 3.0;
 
 const QString defaultColorTheme = QStringLiteral("light");
 const QString defaultReadingFont = QStringLiteral("serif");
+const QString defaultTextAlignment = QStringLiteral("justify");
 
 QString serializedUrl(const QUrl &url)
 {
@@ -49,6 +54,16 @@ QString normalizedColorTheme(const QString &colorTheme)
         QStringLiteral("dark")
     };
     return supportedThemes.contains(normalized) ? normalized : defaultColorTheme;
+}
+
+QString normalizedTextAlignment(const QString &textAlignment)
+{
+    const QString normalized = textAlignment.trimmed().toLower();
+    static const QStringList supportedAlignments = {
+        QStringLiteral("left"),
+        QStringLiteral("justify")
+    };
+    return supportedAlignments.contains(normalized) ? normalized : defaultTextAlignment;
 }
 
 QString normalizedLibrarySortMode(const QString &sortMode)
@@ -190,6 +205,17 @@ LocalStateStore::LocalStateStore(const QString &settingsFilePath, QObject *paren
     m_lineHeight = qBound(minimumLineHeight,
                           m_settings.value(QStringLiteral("reading/lineHeight"), 1.5).toReal(),
                           maximumLineHeight);
+    m_paragraphSpacing = qBound(
+        minimumParagraphSpacing,
+        m_settings.value(QStringLiteral("reading/paragraphSpacing"), 10).toInt(),
+        maximumParagraphSpacing);
+    m_firstLineIndent = qBound(
+        minimumFirstLineIndent,
+        m_settings.value(QStringLiteral("reading/firstLineIndent"), 24).toInt(),
+        maximumFirstLineIndent);
+    m_textAlignment = normalizedTextAlignment(
+        m_settings.value(QStringLiteral("reading/textAlignment"),
+                         defaultTextAlignment).toString());
     m_pageWidth = qBound(minimumPageWidth,
                          m_settings.value(QStringLiteral("reading/pageWidth"), 820).toInt(),
                          maximumPageWidth);
@@ -234,6 +260,21 @@ int LocalStateStore::textFontSize() const
 qreal LocalStateStore::lineHeight() const
 {
     return m_lineHeight;
+}
+
+int LocalStateStore::paragraphSpacing() const
+{
+    return m_paragraphSpacing;
+}
+
+int LocalStateStore::firstLineIndent() const
+{
+    return m_firstLineIndent;
+}
+
+QString LocalStateStore::textAlignment() const
+{
+    return m_textAlignment;
 }
 
 int LocalStateStore::pageWidth() const
@@ -321,6 +362,46 @@ void LocalStateStore::setLineHeight(qreal lineHeight)
     m_lineHeight = lineHeight;
     m_settings.setValue(QStringLiteral("reading/lineHeight"), lineHeight);
     emit lineHeightChanged();
+}
+
+void LocalStateStore::setParagraphSpacing(int paragraphSpacing)
+{
+    paragraphSpacing = qBound(minimumParagraphSpacing,
+                              paragraphSpacing,
+                              maximumParagraphSpacing);
+    if (m_paragraphSpacing == paragraphSpacing) {
+        return;
+    }
+
+    m_paragraphSpacing = paragraphSpacing;
+    m_settings.setValue(QStringLiteral("reading/paragraphSpacing"), paragraphSpacing);
+    emit paragraphSpacingChanged();
+}
+
+void LocalStateStore::setFirstLineIndent(int firstLineIndent)
+{
+    firstLineIndent = qBound(minimumFirstLineIndent,
+                             firstLineIndent,
+                             maximumFirstLineIndent);
+    if (m_firstLineIndent == firstLineIndent) {
+        return;
+    }
+
+    m_firstLineIndent = firstLineIndent;
+    m_settings.setValue(QStringLiteral("reading/firstLineIndent"), firstLineIndent);
+    emit firstLineIndentChanged();
+}
+
+void LocalStateStore::setTextAlignment(const QString &textAlignment)
+{
+    const QString normalizedAlignment = normalizedTextAlignment(textAlignment);
+    if (m_textAlignment == normalizedAlignment) {
+        return;
+    }
+
+    m_textAlignment = normalizedAlignment;
+    m_settings.setValue(QStringLiteral("reading/textAlignment"), normalizedAlignment);
+    emit textAlignmentChanged();
 }
 
 void LocalStateStore::setPageWidth(int pageWidth)
@@ -438,6 +519,9 @@ void LocalStateStore::resetReadingPreferences()
     setReadingFont(defaultReadingFont);
     setTextFontSize(18);
     setLineHeight(1.5);
+    setParagraphSpacing(10);
+    setFirstLineIndent(24);
+    setTextAlignment(defaultTextAlignment);
     setPageWidth(820);
     setScrollSpeed(100);
 }

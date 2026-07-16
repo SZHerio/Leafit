@@ -83,13 +83,13 @@ qt_add_qml_module(appSZHBooks
         library/LibraryContinueCard.qml
         library/LibraryControls.qml
         library/LibraryView.qml
-        reader/ChapterNavigationPopup.qml
-        reader/AnnotationsPopup.qml
         reader/EmptyReaderView.qml
         reader/PageNavigationControl.qml
         reader/PdfDocumentView.qml
+        reader/ReaderSidebar.qml
         reader/ReaderWorkspace.qml
         reader/SearchPopup.qml
+        reader/SelectionActionBar.qml
         reader/TextNavigationControl.qml
         reader/TextDocumentView.qml
         shell/AppHeader.qml

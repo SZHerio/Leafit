@@ -10,6 +10,9 @@ Item {
     property string fontFamily: Theme.readingFontFamily
     property int fontSize: 18
     property real lineHeight: 1.5
+    property int paragraphSpacing: 10
+    property int firstLineIndent: 24
+    property string textAlignment: "justify"
     property int preferredPageWidth: Theme.readerPageMaxWidth
     property int pagePadding: Theme.readerPagePadding
     property real pendingProgress: 0
@@ -50,6 +53,14 @@ Item {
         root.goToProgress(1)
     }
 
+    function scrollByPage(direction) {
+        const pageDistance = Math.max(120, textFlickable.height * 0.86)
+        textFlickable.contentY = Math.max(
+            0,
+            Math.min(root.maximumContentY,
+                     textFlickable.contentY + pageDistance * direction))
+    }
+
     function goToProgress(progress) {
         root.positionRestorePending = false
         textFlickable.contentY = root.maximumContentY * Math.max(0, Math.min(1, progress))
@@ -75,6 +86,12 @@ Item {
 
     function clearSelection() {
         readerText.deselect()
+    }
+
+    function copySelection() {
+        if (readerText.selectedText.length > 0) {
+            readerText.copy()
+        }
     }
 
     function updateHighlightColors() {
@@ -104,7 +121,11 @@ Item {
         const progress = root.positionRestorePending
                          ? root.pendingProgress
                          : root.readingProgress
-        root.documentFormatter.applyLineHeight(readerText.textDocument, root.lineHeight)
+        root.documentFormatter.applyTypography(readerText.textDocument,
+                                               root.lineHeight,
+                                               root.paragraphSpacing,
+                                               root.firstLineIndent,
+                                               root.textAlignment)
         root.restorePosition(progress)
     }
 
@@ -115,6 +136,9 @@ Item {
         Qt.callLater(root.applyTextFormatting)
     }
     onLineHeightChanged: Qt.callLater(root.applyTextFormatting)
+    onParagraphSpacingChanged: Qt.callLater(root.applyTextFormatting)
+    onFirstLineIndentChanged: Qt.callLater(root.applyTextFormatting)
+    onTextAlignmentChanged: Qt.callLater(root.applyTextFormatting)
     onFontFamilyChanged: root.restorePosition(root.readingProgress)
     onFontSizeChanged: root.restorePosition(root.readingProgress)
     onPreferredPageWidthChanged: root.restorePosition(root.readingProgress)

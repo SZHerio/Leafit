@@ -11,16 +11,18 @@ Rectangle {
     property bool darkMode: false
     property bool showingLibrary: false
     readonly property bool compactMode: width < 1080
+    readonly property bool readerPopupOpen: searchPopup.opened
+                                                || readingSettings.opened
+                                                || readerTools.opened
 
     signal openRequested
     signal libraryRequested
     signal darkModeToggled(bool darkMode)
+    signal focusModeRequested
 
     function closeReaderPopups() {
         searchPopup.close()
-        annotationsPopup.close()
         readingSettings.close()
-        chapterNavigation.close()
         readerTools.close()
     }
 
@@ -37,16 +39,12 @@ Rectangle {
             return
         }
         root.closeReaderPopups()
-        annotationsPopup.activeTab = tab === "highlights" ? "highlights" : "bookmarks"
-        annotationsPopup.open()
+        root.readerWorkspace.openSidebar(tab === "highlights" ? "notes" : "bookmarks")
     }
 
     function toggleChapterNavigation() {
-        const wasOpen = chapterNavigation.opened
         root.closeReaderPopups()
-        if (!wasOpen && root.readerWorkspace.hasChapters) {
-            chapterNavigation.open()
-        }
+        root.readerWorkspace.toggleSidebar("contents")
     }
 
     function toggleReadingSettings() {
@@ -71,6 +69,7 @@ Rectangle {
     onShowingLibraryChanged: {
         if (root.showingLibrary) {
             root.closeReaderPopups()
+            root.readerWorkspace.closeSidebar()
         }
     }
 
@@ -78,8 +77,9 @@ Rectangle {
         target: root.readerWorkspace
 
         function onHasChaptersChanged() {
-            if (!root.readerWorkspace.hasChapters) {
-                chapterNavigation.close()
+            if (!root.readerWorkspace.hasChapters
+                    && root.readerWorkspace.sidebarTab === "contents") {
+                root.readerWorkspace.closeSidebar()
             }
         }
 
@@ -188,10 +188,10 @@ Rectangle {
             symbol: "\u2261"
             toolTip: qsTr("Reading marks")
             onChrome: true
-            selected: annotationsPopup.opened
-            onClicked: annotationsPopup.opened
-                       ? annotationsPopup.close()
-                       : root.openAnnotations("bookmarks")
+            selected: root.readerWorkspace.sidebarOpen
+                      && (root.readerWorkspace.sidebarTab === "bookmarks"
+                          || root.readerWorkspace.sidebarTab === "notes")
+            onClicked: root.readerWorkspace.toggleSidebar("bookmarks")
         }
 
         SZHIconButton {
@@ -252,7 +252,8 @@ Rectangle {
             symbol: "\u2630"
             toolTip: qsTr("Chapters")
             onChrome: true
-            selected: chapterNavigation.opened
+            selected: root.readerWorkspace.sidebarOpen
+                      && root.readerWorkspace.sidebarTab === "contents"
             onClicked: root.toggleChapterNavigation()
         }
 
@@ -276,6 +277,15 @@ Rectangle {
             onChrome: true
             selected: readerTools.opened
             onClicked: root.toggleReaderTools()
+        }
+
+        SZHIconButton {
+            visible: !root.showingLibrary && root.readerWorkspace.hasDocument
+            symbol: "\u26f6"
+            symbolPixelSize: Theme.bodyLargeFontSize
+            toolTip: qsTr("Focus mode (F11)")
+            onChrome: true
+            onClicked: root.focusModeRequested()
         }
 
         SZHIconButton {
@@ -322,22 +332,6 @@ Rectangle {
         }
     }
 
-    AnnotationsPopup {
-        id: annotationsPopup
-
-        parent: root
-        x: Math.max(Theme.spaceMd, root.width - width - Theme.spaceLg)
-        y: root.height + Theme.spaceXs
-        readerWorkspace: root.readerWorkspace
-        annotationStore: root.readerWorkspace.annotationStore
-        onAboutToShow: {
-            const buttonPosition = annotationsButton.mapToItem(root, 0, 0)
-            x = Math.max(Theme.spaceMd,
-                         Math.min(root.width - width - Theme.spaceMd,
-                                  buttonPosition.x + annotationsButton.width - width))
-        }
-    }
-
     ReaderToolsPopup {
         id: readerTools
 
@@ -359,19 +353,4 @@ Rectangle {
         onSettingsRequested: root.toggleReadingSettings()
     }
 
-    ChapterNavigationPopup {
-        id: chapterNavigation
-
-        parent: root
-        x: Theme.spaceMd
-        y: root.height + Theme.spaceXs
-        readerWorkspace: root.readerWorkspace
-        onAboutToShow: {
-            const anchorButton = chapterButton.visible ? chapterButton : overflowButton
-            const buttonPosition = anchorButton.mapToItem(root, 0, 0)
-            x = Math.max(Theme.spaceMd,
-                         Math.min(root.width - width - Theme.spaceMd,
-                                  buttonPosition.x + anchorButton.width - width))
-        }
-    }
 }

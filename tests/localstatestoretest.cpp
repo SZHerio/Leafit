@@ -42,6 +42,9 @@ void LocalStateStoreTest::persistsPreferencesAndLastBook()
         store.setReadingFont(QStringLiteral("sans"));
         store.setTextFontSize(99);
         store.setLineHeight(9.0);
+        store.setParagraphSpacing(99);
+        store.setFirstLineIndent(99);
+        store.setTextAlignment(QStringLiteral("left"));
         store.setPageWidth(1);
         store.setScrollSpeed(999);
         store.setLastBookUrl(bookUrl);
@@ -54,6 +57,9 @@ void LocalStateStoreTest::persistsPreferencesAndLastBook()
     QVERIFY(restored.darkMode());
     QCOMPARE(restored.textFontSize(), 36);
     QCOMPARE(restored.lineHeight(), 2.0);
+    QCOMPARE(restored.paragraphSpacing(), 32);
+    QCOMPARE(restored.firstLineIndent(), 64);
+    QCOMPARE(restored.textAlignment(), QStringLiteral("left"));
     QCOMPARE(restored.pageWidth(), 560);
     QCOMPARE(restored.scrollSpeed(), 200);
     QCOMPARE(restored.lastBookUrl(), bookUrl);
@@ -132,6 +138,9 @@ void LocalStateStoreTest::resetsReadingPreferences()
     store.setReadingFont(QStringLiteral("mono"));
     store.setTextFontSize(30);
     store.setLineHeight(1.8);
+    store.setParagraphSpacing(28);
+    store.setFirstLineIndent(48);
+    store.setTextAlignment(QStringLiteral("left"));
     store.setPageWidth(1000);
     store.setScrollSpeed(180);
 
@@ -141,6 +150,9 @@ void LocalStateStoreTest::resetsReadingPreferences()
     QCOMPARE(store.readingFont(), QStringLiteral("serif"));
     QCOMPARE(store.textFontSize(), 18);
     QCOMPARE(store.lineHeight(), 1.5);
+    QCOMPARE(store.paragraphSpacing(), 10);
+    QCOMPARE(store.firstLineIndent(), 24);
+    QCOMPARE(store.textAlignment(), QStringLiteral("justify"));
     QCOMPARE(store.pageWidth(), 820);
     QCOMPARE(store.scrollSpeed(), 100);
 }

@@ -18,6 +18,10 @@ Popup {
         { value: "light", label: qsTr("Light") },
         { value: "dark", label: qsTr("Dark") }
     ]
+    readonly property var alignmentOptions: [
+        { value: "left", label: qsTr("Left") },
+        { value: "justify", label: qsTr("Justified") }
+    ]
     readonly property real hostWindowHeight: root.parent && root.parent.Window.window
                                                    ? root.parent.Window.window.height
                                                    : 720
@@ -126,6 +130,96 @@ Popup {
                     toolTip: qsTr("Increase font size")
                     enabled: root.settingsStore.textFontSize < 36
                     onClicked: root.settingsStore.textFontSize += 1
+                }
+            }
+
+            ColumnLayout {
+                visible: root.textSettingsAvailable
+                Layout.fillWidth: true
+                spacing: Theme.spaceXs
+
+                Label {
+                    text: qsTr("Alignment")
+                    color: Theme.mutedTextColor
+                    font.family: Theme.uiFontFamily
+                    font.pixelSize: Theme.bodyFontSize
+                }
+
+                SZHSegmentedControl {
+                    Layout.fillWidth: true
+                    model: root.alignmentOptions
+                    value: root.settingsStore.textAlignment
+                    onValueSelected: value => root.settingsStore.textAlignment = value
+                }
+            }
+
+            ColumnLayout {
+                visible: root.textSettingsAvailable
+                Layout.fillWidth: true
+                spacing: Theme.spaceXs
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("Paragraph spacing")
+                        color: Theme.mutedTextColor
+                        font.family: Theme.uiFontFamily
+                        font.pixelSize: Theme.bodyFontSize
+                    }
+
+                    Label {
+                        text: root.settingsStore.paragraphSpacing + qsTr(" px")
+                        color: Theme.textColor
+                        font.family: Theme.uiFontFamily
+                        font.pixelSize: Theme.captionFontSize
+                        font.weight: Font.Medium
+                    }
+                }
+
+                SZHSlider {
+                    Layout.fillWidth: true
+                    from: 0
+                    to: 32
+                    stepSize: 2
+                    value: root.settingsStore.paragraphSpacing
+                    onMoved: root.settingsStore.paragraphSpacing = Math.round(value / 2) * 2
+                }
+            }
+
+            ColumnLayout {
+                visible: root.textSettingsAvailable
+                Layout.fillWidth: true
+                spacing: Theme.spaceXs
+
+                RowLayout {
+                    Layout.fillWidth: true
+
+                    Label {
+                        Layout.fillWidth: true
+                        text: qsTr("First-line indent")
+                        color: Theme.mutedTextColor
+                        font.family: Theme.uiFontFamily
+                        font.pixelSize: Theme.bodyFontSize
+                    }
+
+                    Label {
+                        text: root.settingsStore.firstLineIndent + qsTr(" px")
+                        color: Theme.textColor
+                        font.family: Theme.uiFontFamily
+                        font.pixelSize: Theme.captionFontSize
+                        font.weight: Font.Medium
+                    }
+                }
+
+                SZHSlider {
+                    Layout.fillWidth: true
+                    from: 0
+                    to: 64
+                    stepSize: 4
+                    value: root.settingsStore.firstLineIndent
+                    onMoved: root.settingsStore.firstLineIndent = Math.round(value / 4) * 4
                 }
             }
 
