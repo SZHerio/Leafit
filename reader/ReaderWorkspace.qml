@@ -483,6 +483,8 @@ Item {
             anchors.fill: parent
             visible: root.showingText
             documentText: root.readerController.text
+            displayText: root.readerController.displayText
+            richText: root.readerController.richText
             documentFormatter: root.documentFormatter
             searchController: root.searchController
             fontFamily: root.textFontFamily

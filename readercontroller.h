@@ -15,6 +15,8 @@ class ReaderController : public QObject
 {
     Q_OBJECT
     Q_PROPERTY(QString text READ text NOTIFY textChanged)
+    Q_PROPERTY(QString displayText READ displayText NOTIFY displayTextChanged)
+    Q_PROPERTY(bool richText READ richText NOTIFY richTextChanged)
     Q_PROPERTY(QString title READ title NOTIFY titleChanged)
     Q_PROPERTY(QString author READ author NOTIFY authorChanged)
     Q_PROPERTY(QString sourcePath READ sourcePath NOTIFY sourcePathChanged)
@@ -40,6 +42,8 @@ public:
     ~ReaderController() override;
 
     QString text() const;
+    QString displayText() const;
+    bool richText() const;
     QString title() const;
     QString author() const;
     QString sourcePath() const;
@@ -60,6 +64,8 @@ signals:
     void documentOpening();
     void documentOpened(const QUrl &sourceUrl);
     void textChanged();
+    void displayTextChanged();
+    void richTextChanged();
     void titleChanged();
     void authorChanged();
     void sourcePathChanged();
@@ -73,6 +79,8 @@ signals:
 private:
     void applyDocument(const DocumentLoadResult &document);
     void setText(const QString &text);
+    void setDisplayText(const QString &displayText);
+    void setRichText(bool richText);
     void setTitle(const QString &title);
     void setAuthor(const QString &author);
     void setSourcePath(const QString &sourcePath);
@@ -84,6 +92,8 @@ private:
     void setErrorMessage(const QString &errorMessage);
 
     QString m_text;
+    QString m_displayText;
+    bool m_richText = false;
     QString m_title;
     QString m_author;
     QString m_sourcePath;

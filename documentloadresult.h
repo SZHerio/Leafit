@@ -21,6 +21,8 @@ struct DocumentLoadResult
 {
     DocumentViewMode viewMode = DocumentViewMode::None;
     QString text;
+    QString displayText;
+    bool richText = false;
     QString title;
     QString author;
     QString sourcePath;
@@ -52,12 +54,33 @@ struct DocumentLoadResult
         DocumentLoadResult result;
         result.viewMode = DocumentViewMode::Text;
         result.text = text;
+        result.displayText = text;
         result.title = title.isEmpty() ? fileInfo.completeBaseName() : title;
         result.author = author;
         result.sourcePath = fileInfo.absoluteFilePath();
         result.sourceUrl = QUrl::fromLocalFile(result.sourcePath);
         result.formatName = formatName;
         result.chapters = chapters;
+        return result;
+    }
+
+    static DocumentLoadResult richTextDocument(
+        const QFileInfo &fileInfo,
+        const QString &formatName,
+        const QString &text,
+        const QString &displayText,
+        const QString &title = {},
+        const QString &author = {},
+        const QVector<DocumentChapter> &chapters = {})
+    {
+        DocumentLoadResult result = textDocument(fileInfo,
+                                                 formatName,
+                                                 text,
+                                                 title,
+                                                 author,
+                                                 chapters);
+        result.displayText = displayText;
+        result.richText = true;
         return result;
     }
 

@@ -41,6 +41,19 @@ target_include_directories(szhbooks_miniz
 qt_add_executable(appSZHBooks
     archive/ziparchivereader.cpp
     archive/ziparchivereader.h
+    archive/zippathutils.cpp
+    archive/zippathutils.h
+    document/docxcontentrenderer.cpp
+    document/docxcontentrenderer.h
+    document/epubcontentrenderer.cpp
+    document/epubcontentrenderer.h
+    document/fb2contentrenderer.cpp
+    document/fb2contentrenderer.h
+    document/richtextcontent.h
+    document/richtextprocessor.cpp
+    document/richtextprocessor.h
+    document/xmlutils.cpp
+    document/xmlutils.h
     documentloadresult.h
     documentreader.h
     documentreaders.cpp
@@ -86,6 +99,7 @@ qt_add_qml_module(appSZHBooks
         reader/EmptyReaderView.qml
         reader/PageNavigationControl.qml
         reader/PdfDocumentView.qml
+        reader/PdfPasswordDialog.qml
         reader/ReaderSidebar.qml
         reader/ReaderWorkspace.qml
         reader/SearchPopup.qml
@@ -219,6 +233,19 @@ if(BUILD_TESTING)
         qt_add_executable(tst_documentreaders
             archive/ziparchivereader.cpp
             archive/ziparchivereader.h
+            archive/zippathutils.cpp
+            archive/zippathutils.h
+            document/docxcontentrenderer.cpp
+            document/docxcontentrenderer.h
+            document/epubcontentrenderer.cpp
+            document/epubcontentrenderer.h
+            document/fb2contentrenderer.cpp
+            document/fb2contentrenderer.h
+            document/richtextcontent.h
+            document/richtextprocessor.cpp
+            document/richtextprocessor.h
+            document/xmlutils.cpp
+            document/xmlutils.h
             documentloadresult.h
             documentreader.h
             documentreaders.cpp

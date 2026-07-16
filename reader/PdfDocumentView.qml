@@ -1,5 +1,7 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Pdf
+import QtQuick.Layouts
 
 Item {
     id: root
@@ -10,6 +12,8 @@ Item {
     property real pendingScale: 1.0
     property bool stateRestorePending: false
     property string searchQuery: ""
+    property bool passwordAttempted: false
+    property bool passwordRequired: false
 
     readonly property real renderScale: pdfViewer.renderScale
     readonly property bool canZoomOut: renderScale > 0.4
@@ -29,6 +33,10 @@ Item {
                                                                     (currentPage + 1)
                                                                     / pageCount))
                                                 : 0
+    readonly property bool documentHasError: pdfDocument.status === PdfDocument.Error
+    readonly property string documentError: pdfDocument.error.length > 0
+                                                       ? pdfDocument.error
+                                                       : qsTr("The PDF could not be opened.")
 
     function goToPage(page) {
         if (root.pageCount <= 0) {
@@ -110,6 +118,10 @@ Item {
 
     onSourceChanged: {
         root.stateRestorePending = false
+        root.passwordAttempted = false
+        root.passwordRequired = false
+        passwordDialog.close()
+        pdfDocument.password = ""
         pdfViewer.renderScale = 1.0
     }
     onSearchQueryChanged: {
@@ -137,6 +149,17 @@ Item {
         id: pdfDocument
 
         source: root.source
+        onPasswordRequired: {
+            root.passwordRequired = true
+            passwordDialog.requestPassword(root.passwordAttempted)
+        }
+        onStatusChanged: status => {
+            if (status === PdfDocument.Ready) {
+                root.passwordAttempted = false
+                root.passwordRequired = false
+                passwordDialog.close()
+            }
+        }
     }
 
     Rectangle {
@@ -158,6 +181,63 @@ Item {
             anchors.fill: parent
             anchors.margins: Theme.spaceSm
             document: pdfDocument
+        }
+    }
+
+    SZHSurface {
+        anchors.centerIn: parent
+        width: Math.max(0, Math.min(420, parent.width - Theme.spaceXl))
+        height: errorContent.implicitHeight + Theme.spaceXl * 2
+        fillColor: Theme.surfaceColor
+        radius: Theme.radiusLg
+        visible: root.documentHasError && !passwordDialog.visible
+        z: 2
+
+        ColumnLayout {
+            id: errorContent
+
+            anchors.left: parent.left
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            anchors.margins: Theme.spaceLg
+            spacing: Theme.spaceSm
+
+            Label {
+                Layout.fillWidth: true
+                text: root.passwordRequired
+                      ? qsTr("Password required")
+                      : qsTr("Could not open PDF")
+                color: Theme.textColor
+                font.family: Theme.uiFontFamily
+                font.pixelSize: Theme.titleFontSize
+                font.weight: Font.DemiBold
+            }
+
+            Label {
+                Layout.fillWidth: true
+                text: root.passwordRequired
+                      ? qsTr("This document is protected. Enter its password to continue.")
+                      : root.documentError
+                color: Theme.mutedTextColor
+                font.family: Theme.uiFontFamily
+                font.pixelSize: Theme.bodyFontSize
+                wrapMode: Text.Wrap
+            }
+
+            SZHButton {
+                visible: root.passwordRequired
+                text: qsTr("Enter password")
+                onClicked: passwordDialog.requestPassword(root.passwordAttempted)
+            }
+        }
+    }
+
+    PdfPasswordDialog {
+        id: passwordDialog
+
+        onPasswordSubmitted: password => {
+            root.passwordAttempted = true
+            pdfDocument.password = password
         }
     }
 }

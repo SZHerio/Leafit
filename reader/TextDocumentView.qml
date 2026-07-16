@@ -7,12 +7,16 @@ Item {
     required property string documentText
     required property var documentFormatter
     required property var searchController
+    property string displayText: documentText
+    property bool richText: false
     property string fontFamily: Theme.readingFontFamily
     property int fontSize: 18
     property real lineHeight: 1.5
     property int paragraphSpacing: 10
     property int firstLineIndent: 24
     property string textAlignment: "justify"
+    property color linkColor: Theme.textColor
+    property color pageColor: Theme.readingColor
     property int preferredPageWidth: Theme.readerPageMaxWidth
     property int pagePadding: Theme.readerPagePadding
     property real pendingProgress: 0
@@ -78,7 +82,7 @@ Item {
             return
         }
         const positionRect = readerText.positionToRectangle(
-            Math.min(position, root.documentText.length))
+            Math.min(position, readerText.length))
         const targetY = readerPage.y + readerText.y + positionRect.y
                         - textFlickable.height * 0.32
         textFlickable.contentY = Math.max(0, Math.min(root.maximumContentY, targetY))
@@ -92,6 +96,18 @@ Item {
         if (readerText.selectedText.length > 0) {
             readerText.copy()
         }
+    }
+
+    function activateLink(link) {
+        if (link.startsWith("#")) {
+            const position = root.documentFormatter.anchorPosition(readerText.textDocument,
+                                                                    link)
+            if (position >= 0) {
+                root.goToTextPosition(position)
+            }
+            return
+        }
+        Qt.openUrlExternally(link)
     }
 
     function updateHighlightColors() {
@@ -125,20 +141,30 @@ Item {
                                                root.lineHeight,
                                                root.paragraphSpacing,
                                                root.firstLineIndent,
-                                               root.textAlignment)
+                                               root.textAlignment,
+                                               root.linkColor,
+                                               root.pageColor)
+        root.documentFormatter.fitImages(readerText.textDocument,
+                                         Math.max(1, readerText.width))
         root.restorePosition(progress)
     }
 
     onDocumentTextChanged: {
         root.positionRestorePending = false
-        root.searchController.documentText = root.documentText
+        if (root.searchController) {
+            root.searchController.documentText = root.documentText
+        }
         Qt.callLater(root.scrollToStart)
         Qt.callLater(root.applyTextFormatting)
     }
+    onDisplayTextChanged: Qt.callLater(root.applyTextFormatting)
+    onRichTextChanged: Qt.callLater(root.applyTextFormatting)
     onLineHeightChanged: Qt.callLater(root.applyTextFormatting)
     onParagraphSpacingChanged: Qt.callLater(root.applyTextFormatting)
     onFirstLineIndentChanged: Qt.callLater(root.applyTextFormatting)
     onTextAlignmentChanged: Qt.callLater(root.applyTextFormatting)
+    onLinkColorChanged: Qt.callLater(root.applyTextFormatting)
+    onPageColorChanged: Qt.callLater(root.applyTextFormatting)
     onFontFamilyChanged: root.restorePosition(root.readingProgress)
     onFontSizeChanged: root.restorePosition(root.readingProgress)
     onPreferredPageWidthChanged: root.restorePosition(root.readingProgress)
@@ -224,8 +250,8 @@ Item {
                     readOnly: true
                     selectByMouse: true
                     persistentSelection: true
-                    text: root.documentText
-                    textFormat: TextEdit.PlainText
+                    text: root.richText ? root.displayText : root.documentText
+                    textFormat: root.richText ? TextEdit.RichText : TextEdit.PlainText
                     wrapMode: TextEdit.Wrap
                     color: Theme.textColor
                     selectionColor: Theme.accentColor
@@ -236,6 +262,8 @@ Item {
                     font.kerning: true
                     renderType: Text.NativeRendering
                     cursorVisible: false
+                    onLinkActivated: link => root.activateLink(link)
+                    onWidthChanged: Qt.callLater(root.applyTextFormatting)
                 }
             }
         }

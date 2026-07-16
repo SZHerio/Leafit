@@ -38,6 +38,16 @@ QString ReaderController::text() const
     return m_text;
 }
 
+QString ReaderController::displayText() const
+{
+    return m_displayText;
+}
+
+bool ReaderController::richText() const
+{
+    return m_richText;
+}
+
 QString ReaderController::title() const
 {
     return m_title;
@@ -122,6 +132,8 @@ void ReaderController::clearError()
 void ReaderController::applyDocument(const DocumentLoadResult &document)
 {
     setText(document.text);
+    setDisplayText(document.displayText);
+    setRichText(document.richText);
     setTitle(document.title);
     setAuthor(document.author);
     setSourcePath(document.sourcePath);
@@ -140,6 +152,26 @@ void ReaderController::setText(const QString &text)
 
     m_text = text;
     emit textChanged();
+}
+
+void ReaderController::setDisplayText(const QString &displayText)
+{
+    if (m_displayText == displayText) {
+        return;
+    }
+
+    m_displayText = displayText;
+    emit displayTextChanged();
+}
+
+void ReaderController::setRichText(bool richText)
+{
+    if (m_richText == richText) {
+        return;
+    }
+
+    m_richText = richText;
+    emit richTextChanged();
 }
 
 void ReaderController::setTitle(const QString &title)
