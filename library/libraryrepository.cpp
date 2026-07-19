@@ -90,6 +90,50 @@ void LibraryRepository::recordBookOpened(const QUrl &sourceUrl,
     m_store->recordBookOpened(sourceUrl, title, author, formatName);
 }
 
+bool LibraryRepository::registerBook(const QUrl &sourceUrl,
+                                     const QString &collectionPath,
+                                     bool restoreExcluded)
+{
+    if (!m_metadataService->supports(sourceUrl)) {
+        return false;
+    }
+    if (m_store->hasLibraryRecord(sourceUrl)) {
+        if (m_store->containsLibraryBook(sourceUrl)) {
+            m_store->setBookCollection(sourceUrl, collectionPath);
+        } else if (restoreExcluded) {
+            const BookMetadata metadata = m_metadataService->inspect(sourceUrl);
+            m_store->recordBookOpened(sourceUrl,
+                                      metadata.title,
+                                      metadata.author,
+                                      metadata.formatName);
+            m_store->setBookCollection(sourceUrl, collectionPath);
+            m_store->updateBookMetadata(sourceUrl,
+                                        metadata.title,
+                                        metadata.author,
+                                        metadata.formatName,
+                                        metadata.coverUrl,
+                                        metadata.fingerprint);
+            return true;
+        }
+        return false;
+    }
+
+    const BookMetadata metadata = m_metadataService->inspect(sourceUrl);
+    m_store->registerLibraryBook(sourceUrl,
+                                 metadata.title,
+                                 metadata.author,
+                                 metadata.formatName,
+                                 metadata.coverUrl,
+                                 metadata.fingerprint,
+                                 collectionPath);
+    return true;
+}
+
+bool LibraryRepository::supports(const QUrl &sourceUrl) const
+{
+    return m_metadataService->supports(sourceUrl);
+}
+
 void LibraryRepository::removeBook(const QUrl &sourceUrl)
 {
     m_store->removeFromLibrary(sourceUrl);

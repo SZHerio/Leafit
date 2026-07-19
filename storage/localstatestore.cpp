@@ -96,6 +96,13 @@ QString normalizedLibraryViewMode(const QString &viewMode)
                : QStringLiteral("grid");
 }
 
+QString normalizedCollectionPath(QString collectionPath)
+{
+    collectionPath.replace(u'\\', u'/');
+    collectionPath = QDir::cleanPath(collectionPath.trimmed());
+    return collectionPath == QLatin1String(".") ? QString() : collectionPath;
+}
+
 QVariantMap settingsGroupValues(QSettings *settings, const QString &group)
 {
     QVariantMap values;
@@ -382,6 +389,7 @@ bool LocalStateStore::replaceProfileValues(const QVariantMap &values,
 
     loadCachedState();
     emitProfileSignals();
+    emit profileChanged();
     if (errorMessage) {
         errorMessage->clear();
     }
@@ -407,6 +415,7 @@ void LocalStateStore::setColorTheme(const QString &colorTheme)
     if (wasDark != darkMode()) {
         emit darkModeChanged();
     }
+    emit profileChanged();
 }
 
 void LocalStateStore::setLanguage(const QString &language)
@@ -419,6 +428,7 @@ void LocalStateStore::setLanguage(const QString &language)
     m_language = normalized;
     m_settings.setValue(QStringLiteral("appearance/language"), normalized);
     emit languageChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::setReadingFont(const QString &readingFont)
@@ -431,6 +441,7 @@ void LocalStateStore::setReadingFont(const QString &readingFont)
     m_readingFont = normalizedFont;
     m_settings.setValue(QStringLiteral("reading/font"), normalizedFont);
     emit readingFontChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::setTextFontSize(int textFontSize)
@@ -443,6 +454,7 @@ void LocalStateStore::setTextFontSize(int textFontSize)
     m_textFontSize = textFontSize;
     m_settings.setValue(QStringLiteral("reading/fontSize"), textFontSize);
     emit textFontSizeChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::setLineHeight(qreal lineHeight)
@@ -455,6 +467,7 @@ void LocalStateStore::setLineHeight(qreal lineHeight)
     m_lineHeight = lineHeight;
     m_settings.setValue(QStringLiteral("reading/lineHeight"), lineHeight);
     emit lineHeightChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::setParagraphSpacing(int paragraphSpacing)
@@ -469,6 +482,7 @@ void LocalStateStore::setParagraphSpacing(int paragraphSpacing)
     m_paragraphSpacing = paragraphSpacing;
     m_settings.setValue(QStringLiteral("reading/paragraphSpacing"), paragraphSpacing);
     emit paragraphSpacingChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::setFirstLineIndent(int firstLineIndent)
@@ -483,6 +497,7 @@ void LocalStateStore::setFirstLineIndent(int firstLineIndent)
     m_firstLineIndent = firstLineIndent;
     m_settings.setValue(QStringLiteral("reading/firstLineIndent"), firstLineIndent);
     emit firstLineIndentChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::setTextAlignment(const QString &textAlignment)
@@ -495,6 +510,7 @@ void LocalStateStore::setTextAlignment(const QString &textAlignment)
     m_textAlignment = normalizedAlignment;
     m_settings.setValue(QStringLiteral("reading/textAlignment"), normalizedAlignment);
     emit textAlignmentChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::setPageWidth(int pageWidth)
@@ -507,6 +523,7 @@ void LocalStateStore::setPageWidth(int pageWidth)
     m_pageWidth = pageWidth;
     m_settings.setValue(QStringLiteral("reading/pageWidth"), pageWidth);
     emit pageWidthChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::setScrollSpeed(int scrollSpeed)
@@ -519,6 +536,7 @@ void LocalStateStore::setScrollSpeed(int scrollSpeed)
     m_scrollSpeed = scrollSpeed;
     m_settings.setValue(QStringLiteral("reading/scrollSpeed"), scrollSpeed);
     emit scrollSpeedChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::setLastBookUrl(const QUrl &lastBookUrl)
@@ -534,6 +552,7 @@ void LocalStateStore::setLastBookUrl(const QUrl &lastBookUrl)
         m_settings.setValue(QStringLiteral("session/lastBookUrl"), serializedUrl(lastBookUrl));
     }
     emit lastBookUrlChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::setLibrarySortMode(const QString &sortMode)
@@ -544,6 +563,7 @@ void LocalStateStore::setLibrarySortMode(const QString &sortMode)
     }
     m_librarySortMode = normalizedMode;
     m_settings.setValue(QStringLiteral("library/sortMode"), normalizedMode);
+    emit profileChanged();
 }
 
 void LocalStateStore::setLibraryViewMode(const QString &viewMode)
@@ -554,6 +574,7 @@ void LocalStateStore::setLibraryViewMode(const QString &viewMode)
     }
     m_libraryViewMode = normalizedMode;
     m_settings.setValue(QStringLiteral("library/viewMode"), normalizedMode);
+    emit profileChanged();
 }
 
 qreal LocalStateStore::textPosition(const QUrl &documentUrl) const
@@ -586,6 +607,7 @@ void LocalStateStore::saveTextPosition(const QUrl &documentUrl, qreal progress)
     m_settings.setValue(documentKey(documentUrl, QStringLiteral("textProgress")), progress);
     m_settings.setValue(documentKey(documentUrl, QStringLiteral("readingProgress")), progress);
     emit documentProgressChanged(documentUrl, progress);
+    emit profileChanged();
 }
 
 void LocalStateStore::savePdfPosition(const QUrl &documentUrl,
@@ -604,6 +626,7 @@ void LocalStateStore::savePdfPosition(const QUrl &documentUrl,
     progress = qBound(qreal(0), progress, qreal(1));
     m_settings.setValue(documentKey(documentUrl, QStringLiteral("readingProgress")), progress);
     emit documentProgressChanged(documentUrl, progress);
+    emit profileChanged();
 }
 
 void LocalStateStore::resetReadingPreferences()
@@ -654,6 +677,8 @@ QVector<LibraryBook> LocalStateStore::libraryBooks() const
         if (book.formatName.isEmpty()) {
             book.formatName = fileInfo.suffix().toUpper();
         }
+        book.collectionPath = normalizedCollectionPath(
+            m_settings.value(QStringLiteral("collectionPath")).toString());
         book.metadataFingerprint = m_settings.value(
             QStringLiteral("metadataFingerprint")).toString();
         book.coverUrl = QUrl(m_settings.value(QStringLiteral("coverUrl")).toString());
@@ -701,6 +726,37 @@ void LocalStateStore::recordBookOpened(const QUrl &documentUrl,
     m_settings.setValue(documentKey(documentUrl, QStringLiteral("lastOpened")),
                         QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
     emit libraryChanged();
+    emit profileChanged();
+}
+
+void LocalStateStore::registerLibraryBook(const QUrl &documentUrl,
+                                          const QString &title,
+                                          const QString &author,
+                                          const QString &formatName,
+                                          const QUrl &coverUrl,
+                                          const QString &metadataFingerprint,
+                                          const QString &collectionPath)
+{
+    if (documentUrl.isEmpty() || hasLibraryRecord(documentUrl)) {
+        return;
+    }
+
+    rememberDocumentUrl(documentUrl);
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("inLibrary")), true);
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("title")), title.trimmed());
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("author")), author.trimmed());
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("formatName")),
+                        formatName.trimmed());
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("collectionPath")),
+                        normalizedCollectionPath(collectionPath));
+    m_settings.setValue(documentKey(documentUrl, QStringLiteral("metadataFingerprint")),
+                        metadataFingerprint);
+    if (!coverUrl.isEmpty()) {
+        m_settings.setValue(documentKey(documentUrl, QStringLiteral("coverUrl")),
+                            serializedUrl(coverUrl));
+    }
+    emit libraryChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::updateBookMetadata(const QUrl &documentUrl,
@@ -727,6 +783,7 @@ void LocalStateStore::updateBookMetadata(const QUrl &documentUrl,
         m_settings.setValue(documentKey(documentUrl, QStringLiteral("coverUrl")),
                             serializedUrl(coverUrl));
     }
+    emit profileChanged();
 }
 
 bool LocalStateStore::containsLibraryBook(const QUrl &documentUrl) const
@@ -734,6 +791,29 @@ bool LocalStateStore::containsLibraryBook(const QUrl &documentUrl) const
     return !documentUrl.isEmpty()
            && m_settings.value(documentKey(documentUrl, QStringLiteral("inLibrary")), false)
                   .toBool();
+}
+
+bool LocalStateStore::hasLibraryRecord(const QUrl &documentUrl) const
+{
+    return !documentUrl.isEmpty()
+           && m_settings.contains(documentKey(documentUrl, QStringLiteral("inLibrary")));
+}
+
+void LocalStateStore::setBookCollection(const QUrl &documentUrl,
+                                        const QString &collectionPath)
+{
+    if (documentUrl.isEmpty() || !containsLibraryBook(documentUrl)) {
+        return;
+    }
+
+    const QString key = documentKey(documentUrl, QStringLiteral("collectionPath"));
+    const QString normalizedPath = normalizedCollectionPath(collectionPath);
+    if (normalizedCollectionPath(m_settings.value(key).toString()) == normalizedPath) {
+        return;
+    }
+    m_settings.setValue(key, normalizedPath);
+    emit libraryChanged();
+    emit profileChanged();
 }
 
 void LocalStateStore::removeFromLibrary(const QUrl &documentUrl)
@@ -747,6 +827,7 @@ void LocalStateStore::removeFromLibrary(const QUrl &documentUrl)
         setLastBookUrl({});
     }
     emit libraryChanged();
+    emit profileChanged();
 }
 
 bool LocalStateStore::relinkDocument(const QUrl &oldDocumentUrl,
@@ -796,6 +877,7 @@ bool LocalStateStore::relinkDocument(const QUrl &oldDocumentUrl,
     }
     m_settings.sync();
     emit libraryChanged();
+    emit profileChanged();
     return true;
 }
 

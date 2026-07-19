@@ -11,6 +11,7 @@ struct LibraryBook final
     QString title;
     QString author;
     QString formatName;
+    QString collectionPath;
     QString metadataFingerprint;
     QUrl coverUrl;
     qreal progress = 0;

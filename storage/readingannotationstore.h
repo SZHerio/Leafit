@@ -42,6 +42,7 @@ public:
 signals:
     void documentUrlChanged();
     void annotationsChanged();
+    void profileChanged();
 
 private:
     static QVariantMap toVariantMap(const ReadingAnnotation &annotation);

@@ -78,6 +78,13 @@ public:
                           const QString &title,
                           const QString &author,
                           const QString &formatName);
+    void registerLibraryBook(const QUrl &documentUrl,
+                             const QString &title,
+                             const QString &author,
+                             const QString &formatName,
+                             const QUrl &coverUrl,
+                             const QString &metadataFingerprint,
+                             const QString &collectionPath);
     void updateBookMetadata(const QUrl &documentUrl,
                             const QString &title,
                             const QString &author,
@@ -85,6 +92,8 @@ public:
                             const QUrl &coverUrl,
                             const QString &metadataFingerprint);
     bool containsLibraryBook(const QUrl &documentUrl) const;
+    bool hasLibraryRecord(const QUrl &documentUrl) const;
+    void setBookCollection(const QUrl &documentUrl, const QString &collectionPath);
     void removeFromLibrary(const QUrl &documentUrl);
     bool relinkDocument(const QUrl &oldDocumentUrl, const QUrl &newDocumentUrl);
 
@@ -103,6 +112,7 @@ signals:
     void lastBookUrlChanged();
     void libraryChanged();
     void documentProgressChanged(const QUrl &documentUrl, qreal progress);
+    void profileChanged();
     void profileReplaced();
 
 private:

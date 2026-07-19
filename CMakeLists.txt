@@ -93,6 +93,14 @@ target_sources(appSZHBooks PRIVATE
     storage/profilestorage.h
     storage/readingannotationstore.cpp
     storage/readingannotationstore.h
+    sync/onedrivelibraryservice.cpp
+    sync/onedrivelibraryservice.h
+    sync/portableprofilemapper.cpp
+    sync/portableprofilemapper.h
+    sync/profilesyncengine.cpp
+    sync/profilesyncengine.h
+    sync/syncconfigurationstore.cpp
+    sync/syncconfigurationstore.h
 )
 
 target_include_directories(appSZHBooks PRIVATE
@@ -289,6 +297,52 @@ if(BUILD_TESTING)
 
         add_test(NAME profilearchive COMMAND tst_profilearchive)
         set_tests_properties(profilearchive PROPERTIES
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
+        )
+
+        qt_add_executable(tst_onedrivesync
+            archive/ziparchivereader.cpp
+            archive/ziparchivereader.h
+            library/bookcoverprovider.cpp
+            library/bookcoverprovider.h
+            library/bookmetadata.h
+            library/bookmetadataservice.cpp
+            library/bookmetadataservice.h
+            library/librarybook.h
+            library/libraryrepository.cpp
+            library/libraryrepository.h
+            reader/readingannotation.h
+            storage/documentstoragekey.cpp
+            storage/documentstoragekey.h
+            storage/localstatestore.cpp
+            storage/localstatestore.h
+            storage/profilestorage.h
+            storage/readingannotationstore.cpp
+            storage/readingannotationstore.h
+            sync/onedrivelibraryservice.cpp
+            sync/onedrivelibraryservice.h
+            sync/portableprofilemapper.cpp
+            sync/portableprofilemapper.h
+            sync/profilesyncengine.cpp
+            sync/profilesyncengine.h
+            sync/syncconfigurationstore.cpp
+            sync/syncconfigurationstore.h
+            tests/onedrivesynctest.cpp
+        )
+
+        target_link_libraries(tst_onedrivesync
+            PRIVATE
+                szhbooks_miniz
+                Qt6::Core
+                Qt6::Gui
+                Qt6::Pdf
+                Qt6::Test
+                Qt6::Xml
+        )
+
+        add_test(NAME onedrivesync COMMAND tst_onedrivesync)
+        set_tests_properties(onedrivesync PROPERTIES
             ENVIRONMENT_MODIFICATION
                 "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
         )

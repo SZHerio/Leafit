@@ -27,6 +27,10 @@ public:
                           const QString &title,
                           const QString &author,
                           const QString &formatName);
+    bool registerBook(const QUrl &sourceUrl,
+                      const QString &collectionPath,
+                      bool restoreExcluded = false);
+    bool supports(const QUrl &sourceUrl) const;
     void removeBook(const QUrl &sourceUrl);
     bool relinkBook(const QUrl &oldSourceUrl,
                     const QUrl &newSourceUrl,

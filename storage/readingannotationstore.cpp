@@ -87,6 +87,7 @@ bool ReadingAnnotationStore::toggleBookmark(qreal progress, int page, const QStr
         m_annotations.removeAt(existingIndex);
         removeStoredAnnotation(annotationId);
         emit annotationsChanged();
+        emit profileChanged();
         return false;
     }
 
@@ -101,6 +102,7 @@ bool ReadingAnnotationStore::toggleBookmark(qreal progress, int page, const QStr
     sortAnnotations();
     saveAnnotation(annotation);
     emit annotationsChanged();
+    emit profileChanged();
     return true;
 }
 
@@ -134,6 +136,7 @@ QString ReadingAnnotationStore::addHighlight(int start,
             annotation.note = normalizedNote(note);
             saveAnnotation(annotation);
             emit annotationsChanged();
+            emit profileChanged();
             return annotation.id;
         }
     }
@@ -152,6 +155,7 @@ QString ReadingAnnotationStore::addHighlight(int start,
     sortAnnotations();
     saveAnnotation(annotation);
     emit annotationsChanged();
+    emit profileChanged();
     return annotation.id;
 }
 
@@ -169,6 +173,7 @@ void ReadingAnnotationStore::updateNote(const QString &annotationId, const QStri
         annotation.note = cleanNote;
         saveAnnotation(annotation);
         emit annotationsChanged();
+        emit profileChanged();
         return;
     }
 }
@@ -187,6 +192,7 @@ void ReadingAnnotationStore::removeAnnotation(const QString &annotationId)
     m_annotations.erase(iterator);
     removeStoredAnnotation(annotationId);
     emit annotationsChanged();
+    emit profileChanged();
 }
 
 void ReadingAnnotationStore::reload()
