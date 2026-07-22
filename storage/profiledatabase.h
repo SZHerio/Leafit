@@ -84,6 +84,7 @@ public:
     bool relinkDocument(const QUrl &oldDocumentUrl, const QUrl &newDocumentUrl);
 
     QVector<ReadingAnnotation> annotations(const QUrl &documentUrl) const;
+    QVector<LibraryReadingAnnotation> libraryAnnotations() const;
     bool saveAnnotation(const QUrl &documentUrl, const ReadingAnnotation &annotation);
     bool removeAnnotation(const QUrl &documentUrl, const QString &annotationId);
 

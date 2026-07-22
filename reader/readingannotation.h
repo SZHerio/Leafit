@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include <QString>
+#include <QUrl>
 
 enum class ReadingAnnotationType {
     Bookmark,
@@ -19,4 +20,13 @@ struct ReadingAnnotation {
     QString excerpt;
     QString note;
     QDateTime createdAt;
+};
+
+struct LibraryReadingAnnotation final
+{
+    QUrl sourceUrl;
+    QString bookTitle;
+    QString bookAuthor;
+    QString formatName;
+    ReadingAnnotation annotation;
 };

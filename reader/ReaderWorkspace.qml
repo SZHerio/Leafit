@@ -118,8 +118,10 @@ Item {
     property var bookTypography: ({})
     property var navigationHistory: []
     property int navigationHistoryIndex: -1
+    property bool awaitingTextRestore: false
 
     signal openRequested
+    signal readingStateRestored
 
     onSearchQueryChanged: {
         root.searchController.query = root.searchQuery
@@ -615,7 +617,9 @@ Item {
         if (root.showingPdf) {
             pdfView.restoreState(root.settingsStore.pdfPage(root.activeDocumentUrl),
                                  root.settingsStore.pdfScale(root.activeDocumentUrl))
+            root.readingStateRestored()
         } else if (root.showingText) {
+            root.awaitingTextRestore = true
             root.loadBookTypography()
             root.textReadingMode = root.settingsStore.textReadingMode(
                 root.activeDocumentUrl)
@@ -641,6 +645,7 @@ Item {
             root.bookTypographyEnabled = false
             root.bookTypography = ({})
             root.resetNavigationHistory()
+            root.awaitingTextRestore = false
         }
 
         function onDocumentOpened() {
@@ -648,6 +653,17 @@ Item {
                 root.configureDocumentTools()
                 root.restoreReadingState()
             })
+        }
+    }
+
+    Connections {
+        target: textView
+
+        function onPositionRestored() {
+            if (root.awaitingTextRestore) {
+                root.awaitingTextRestore = false
+                root.readingStateRestored()
+            }
         }
     }
 

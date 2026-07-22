@@ -99,6 +99,7 @@
       <source>Use black theme (Ctrl+Shift+D)</source>
       <translation>Включить чёрную тему (Ctrl+Shift+D)</translation>
     </message>
+    <message><source>Notes center</source><translation>Центр заметок</translation></message>
   </context>
   <context>
     <name>CreateCollectionDialog</name>
@@ -1901,5 +1902,57 @@
     <message><source>The selected file is not a readable image.</source><translation>Не удалось прочитать выбранное изображение.</translation></message>
     <message><source>Could not create the custom cover folder.</source><translation>Не удалось создать папку пользовательских обложек.</translation></message>
     <message><source>Could not save the custom cover.</source><translation>Не удалось сохранить пользовательскую обложку.</translation></message>
+  </context>
+  <context>
+    <name>NotesCenterDialog</name>
+    <message><source>Notes center</source><translation>Центр заметок</translation></message>
+    <message numerus="yes"><source>%n reading mark(s)</source><translation><numerusform>%n метка чтения</numerusform><numerusform>%n метки чтения</numerusform><numerusform>%n меток чтения</numerusform></translation></message>
+    <message><source>Export</source><translation>Экспорт</translation></message>
+    <message><source>Markdown</source><translation>Markdown</translation></message>
+    <message><source>HTML</source><translation>HTML</translation></message>
+    <message><source>Export visible notes</source><translation>Экспортировать видимые заметки</translation></message>
+    <message><source>Close</source><translation>Закрыть</translation></message>
+    <message><source>Search notes and books</source><translation>Поиск по заметкам и книгам</translation></message>
+    <message><source>All</source><translation>Все</translation></message>
+    <message><source>Bookmarks</source><translation>Закладки</translation></message>
+    <message><source>Highlights</source><translation>Выделения</translation></message>
+    <message><source>Notes</source><translation>Заметки</translation></message>
+    <message><source>Bookmark</source><translation>Закладка</translation></message>
+    <message><source>Highlight</source><translation>Выделение</translation></message>
+    <message><source>Page %1</source><translation>Страница %1</translation></message>
+    <message><source>%1%</source><translation>%1%</translation></message>
+    <message><source>No reading marks yet</source><translation>Меток чтения пока нет</translation></message>
+    <message><source>No notes match the current filter</source><translation>Нет заметок, соответствующих фильтру</translation></message>
+    <message><source>Label</source><translation>Метка</translation></message>
+    <message><source>Reading mark label</source><translation>Название метки</translation></message>
+    <message><source>Note</source><translation>Заметка</translation></message>
+    <message><source>Write a note</source><translation>Напишите заметку</translation></message>
+    <message><source>Open</source><translation>Открыть</translation></message>
+    <message><source>Save</source><translation>Сохранить</translation></message>
+    <message><source>Delete reading mark</source><translation>Удалить метку чтения</translation></message>
+    <message><source>Select a reading mark</source><translation>Выберите метку чтения</translation></message>
+    <message><source>Export reading notes</source><translation>Экспорт заметок о чтении</translation></message>
+    <message><source>HTML document (*.html)</source><translation>Документ HTML (*.html)</translation></message>
+    <message><source>Markdown document (*.md)</source><translation>Документ Markdown (*.md)</translation></message>
+    <message><source>Delete reading mark?</source><translation>Удалить метку чтения?</translation></message>
+    <message><source>This bookmark, highlight or note will be removed from every synchronized device.</source><translation>Эта закладка, выделение или заметка будет удалена со всех синхронизированных устройств.</translation></message>
+    <message><source>Delete</source><translation>Удалить</translation></message>
+  </context>
+  <context>
+    <name>NotesCenterModel</name>
+    <message><source>This reading mark no longer exists.</source><translation>Эта метка чтения больше не существует.</translation></message>
+    <message><source>Choose a local export file.</source><translation>Выберите локальный файл для экспорта.</translation></message>
+    <message><source>Unsupported notes export format.</source><translation>Неподдерживаемый формат экспорта заметок.</translation></message>
+    <message><source>Could not create the notes export file.</source><translation>Не удалось создать файл экспорта заметок.</translation></message>
+    <message><source>Could not save the notes export file.</source><translation>Не удалось сохранить файл экспорта заметок.</translation></message>
+    <message><source>Page %1</source><translation>Страница %1</translation></message>
+    <message><source>%1%</source><translation>%1%</translation></message>
+    <message><source>SZHBooks reading notes</source><translation>Заметки о чтении SZHBooks</translation></message>
+    <message><source>Exported %1</source><translation>Экспортировано %1</translation></message>
+    <message><source>Author</source><translation>Автор</translation></message>
+    <message><source>Location</source><translation>Позиция</translation></message>
+    <message><source>Type</source><translation>Тип</translation></message>
+    <message><source>Bookmark</source><translation>Закладка</translation></message>
+    <message><source>Highlight</source><translation>Выделение</translation></message>
   </context>
 </TS>

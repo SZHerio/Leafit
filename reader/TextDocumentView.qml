@@ -101,6 +101,7 @@ Item {
     }
 
     signal semanticNavigationRequested(int textPosition)
+    signal positionRestored
 
     function positionAtDocumentY(documentY) {
         return Math.max(0,
@@ -250,6 +251,7 @@ Item {
         } else {
             textFlickable.contentY = root.maximumContentY * targetProgress
         }
+        root.positionRestored()
     }
 
     function rebuildPagination() {
@@ -296,6 +298,7 @@ Item {
             } else {
                 root.goToProgress(targetProgress)
             }
+            root.positionRestored()
         } else {
             root.currentPageIndex = Math.max(0,
                                              Math.min(root.currentPageIndex,

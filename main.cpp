@@ -12,6 +12,7 @@
 #include "library/librarymodel.h"
 #include "library/libraryrepository.h"
 #include "localization/localizationcontroller.h"
+#include "notes/notescentermodel.h"
 #include "reader/readingsearchcontroller.h"
 #include "reader/readingdocumentformatter.h"
 #include "readercontroller.h"
@@ -64,14 +65,39 @@ int main(int argc, char *argv[])
     ReadingDocumentFormatter documentFormatter;
     ReadingSearchController searchController;
     ReadingAnnotationStore annotationStore(localState.profileDatabase());
+    NotesCenterModel notesCenterModel(localState.profileDatabase());
     OneDriveLibraryService oneDriveLibraryService(&localState, &libraryRepository);
 
     QObject::connect(&localState,
                      &LocalStateStore::profileReplaced,
                      &annotationStore,
                      &ReadingAnnotationStore::reload);
+    QObject::connect(&localState,
+                     &LocalStateStore::profileReplaced,
+                     &notesCenterModel,
+                     &NotesCenterModel::refresh);
+    QObject::connect(&libraryRepository,
+                     &LibraryRepository::changed,
+                     &notesCenterModel,
+                     &NotesCenterModel::refresh);
+    QObject::connect(&annotationStore,
+                     &ReadingAnnotationStore::annotationsChanged,
+                     &notesCenterModel,
+                     &NotesCenterModel::refresh);
+    QObject::connect(&notesCenterModel,
+                     &NotesCenterModel::annotationChanged,
+                     &annotationStore,
+                     [&annotationStore](const QUrl &sourceUrl) {
+                         if (annotationStore.documentUrl() == sourceUrl) {
+                             annotationStore.reload();
+                         }
+                     });
     QObject::connect(&annotationStore,
                      &ReadingAnnotationStore::profileChanged,
+                     &oneDriveLibraryService,
+                     &OneDriveLibraryService::scheduleSynchronization);
+    QObject::connect(&notesCenterModel,
+                     &NotesCenterModel::profileChanged,
                      &oneDriveLibraryService,
                      &OneDriveLibraryService::scheduleSynchronization);
 
@@ -117,6 +143,8 @@ int main(int argc, char *argv[])
          QVariant::fromValue(static_cast<QObject *>(&searchController))},
         {QStringLiteral("readingAnnotationStore"),
          QVariant::fromValue(static_cast<QObject *>(&annotationStore))},
+        {QStringLiteral("notesCenterModel"),
+         QVariant::fromValue(static_cast<QObject *>(&notesCenterModel))},
         {QStringLiteral("oneDriveLibraryService"),
          QVariant::fromValue(static_cast<QObject *>(&oneDriveLibraryService))}
     });

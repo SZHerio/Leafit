@@ -22,6 +22,7 @@ Rectangle {
     signal focusModeRequested
     signal backupProfileRequested
     signal restoreProfileRequested
+    signal notesCenterRequested
 
     function closeReaderPopups() {
         searchPopup.close()
@@ -289,6 +290,14 @@ Rectangle {
             toolTip: qsTr("Focus mode (F11)")
             onChrome: true
             onClicked: root.focusModeRequested()
+        }
+
+        SZHIconButton {
+            visible: root.showingLibrary
+            symbol: "\u2261"
+            toolTip: qsTr("Notes center")
+            onChrome: true
+            onClicked: root.notesCenterRequested()
         }
 
         SZHIconButton {

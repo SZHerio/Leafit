@@ -289,6 +289,43 @@ TestCase {
         }
     }
 
+    ListModel {
+        id: mockNotesModel
+
+        property string query: ""
+        property string typeFilter: "all"
+        property int totalCount: count
+        property int bookmarkCount: 0
+        property int highlightCount: 1
+        property int noteCount: 1
+        property string errorMessage: ""
+        property url lastExportUrl: ""
+        property int updateCount: 0
+
+        function refresh() {}
+        function clearError() { errorMessage = "" }
+        function find(sourceUrl, annotationId) { return get(0) }
+        function updateAnnotation(sourceUrl, annotationId, label, note) {
+            updateCount += 1
+            setProperty(0, "label", label)
+            setProperty(0, "note", note)
+            return true
+        }
+        function removeAnnotation(sourceUrl, annotationId) {
+            remove(0)
+            return true
+        }
+        function exportFiltered(fileUrl, format) { return true }
+    }
+
+    Component {
+        id: notesCenterComponent
+
+        NotesCenterDialog {
+            notesModel: mockNotesModel
+        }
+    }
+
     Component {
         id: bookActionsComponent
 
@@ -562,6 +599,48 @@ TestCase {
         compare(dialog.currentView, "status")
         dialog.currentView = "activity"
         compare(dialog.currentView, "activity")
+        keyClick(Qt.Key_Escape)
+        tryCompare(dialog, "opened", false)
+    }
+
+    function test_notesCenterFiltersAndEdits() {
+        mockNotesModel.clear()
+        mockNotesModel.append({
+            "annotationId": "mark-1",
+            "annotationType": "highlight",
+            "sourceUrl": "file:///C:/Books/novel.txt",
+            "bookTitle": "Novel",
+            "bookAuthor": "Author",
+            "formatName": "TXT",
+            "progress": 0.42,
+            "page": -1,
+            "start": 24,
+            "length": 12,
+            "label": "Passage",
+            "excerpt": "A selected passage",
+            "note": "Original note",
+            "createdAt": new Date(2026, 0, 1)
+        })
+        mockNotesModel.updateCount = 0
+        const dialog = createTemporaryObject(notesCenterComponent, stage)
+        verify(dialog)
+        dialog.open()
+        tryCompare(dialog, "opened", true)
+
+        const searchField = findChild(dialog, "notesSearchField")
+        const noteEditor = findChild(dialog, "annotationNoteEditor")
+        const saveButton = findChild(dialog, "saveAnnotationButton")
+        verify(searchField)
+        verify(noteEditor)
+        verify(saveButton)
+        tryCompare(noteEditor, "text", "Original note")
+        noteEditor.text = "Edited note"
+        saveButton.clicked()
+        compare(mockNotesModel.updateCount, 1)
+        compare(mockNotesModel.get(0).note, "Edited note")
+
+        searchField.text = "Novel"
+        compare(mockNotesModel.query, "Novel")
         keyClick(Qt.Key_Escape)
         tryCompare(dialog, "opened", false)
     }

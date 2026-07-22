@@ -14,6 +14,7 @@ ApplicationWindow {
     required property var readingDocumentFormatter
     required property var readingSearchController
     required property var readingAnnotationStore
+    required property var notesCenterModel
     required property var oneDriveLibraryService
 
     property bool showingLibrary: true
@@ -26,6 +27,7 @@ ApplicationWindow {
     property string profileNoticeHeading
     property string profileNoticeMessage
     property string profileNoticeKind: "info"
+    property var pendingLibraryAnnotation: ({})
     readonly property bool readingNavigationEnabled: !root.showingLibrary
                                                       && readerWorkspace.hasDocument
                                                       && !appHeader.readerPopupOpen
@@ -54,7 +56,23 @@ ApplicationWindow {
     function openBook(fileUrl) {
         if (root.readerController.openFile(fileUrl)) {
             root.showingLibrary = false
+            return true
         }
+        return false
+    }
+
+    function openLibraryAnnotation(annotation) {
+        if (!annotation || annotation.sourceUrl === undefined)
+            return
+        const targetUrl = annotation.sourceUrl.toString()
+        if (!root.showingLibrary
+                && root.readerController.sourceUrl.toString() === targetUrl) {
+            readerWorkspace.goToAnnotation(annotation)
+            return
+        }
+        root.pendingLibraryAnnotation = annotation
+        if (!root.openBook(annotation.sourceUrl))
+            root.pendingLibraryAnnotation = ({})
     }
 
     function addBooks(fileUrls) {
@@ -210,6 +228,13 @@ ApplicationWindow {
         syncService: root.oneDriveLibraryService
     }
 
+    NotesCenterDialog {
+        id: notesCenterDialog
+
+        notesModel: root.notesCenterModel
+        onAnnotationActivated: annotation => root.openLibraryAnnotation(annotation)
+    }
+
     FileDialog {
         id: relinkDialog
 
@@ -358,6 +383,7 @@ ApplicationWindow {
         onFocusModeRequested: root.toggleFocusMode()
         onBackupProfileRequested: profileBackupDialog.open()
         onRestoreProfileRequested: profileRestoreFileDialog.open()
+        onNotesCenterRequested: notesCenterDialog.open()
     }
 
     footer: ReaderStatusBar {
@@ -379,6 +405,15 @@ ApplicationWindow {
         searchController: root.readingSearchController
         annotationStore: root.readingAnnotationStore
         onOpenRequested: openDialog.open()
+        onReadingStateRestored: {
+            if (root.pendingLibraryAnnotation.annotationId !== undefined) {
+                const annotation = root.pendingLibraryAnnotation
+                root.pendingLibraryAnnotation = ({})
+                Qt.callLater(function() {
+                    readerWorkspace.goToAnnotation(annotation)
+                })
+            }
+        }
 
         Behavior on opacity {
             NumberAnimation {

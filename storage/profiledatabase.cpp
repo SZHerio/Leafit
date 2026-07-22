@@ -116,6 +116,22 @@ QDateTime dateTimeFromStorage(const QString &value)
     return dateTime;
 }
 
+ReadingAnnotation annotationFromQuery(const QSqlQuery &query, int offset = 0)
+{
+    ReadingAnnotation annotation;
+    annotation.id = query.value(offset).toString();
+    annotation.type = annotationTypeFromName(query.value(offset + 1).toString());
+    annotation.progress = qBound(qreal(0), query.value(offset + 2).toReal(), qreal(1));
+    annotation.page = query.value(offset + 3).toInt();
+    annotation.start = query.value(offset + 4).toInt();
+    annotation.length = qMax(0, query.value(offset + 5).toInt());
+    annotation.label = query.value(offset + 6).toString();
+    annotation.excerpt = query.value(offset + 7).toString();
+    annotation.note = query.value(offset + 8).toString();
+    annotation.createdAt = dateTimeFromStorage(query.value(offset + 9).toString());
+    return annotation;
+}
+
 bool bindAndExecute(QSqlQuery *query,
                     const QList<QPair<QString, QVariant>> &bindings)
 {
@@ -1370,18 +1386,34 @@ QVector<ReadingAnnotation> ProfileDatabase::annotations(const QUrl &documentUrl)
         return annotations;
     }
     while (query.next()) {
-        ReadingAnnotation annotation;
-        annotation.id = query.value(0).toString();
-        annotation.type = annotationTypeFromName(query.value(1).toString());
-        annotation.progress = qBound(qreal(0), query.value(2).toReal(), qreal(1));
-        annotation.page = query.value(3).toInt();
-        annotation.start = query.value(4).toInt();
-        annotation.length = qMax(0, query.value(5).toInt());
-        annotation.label = query.value(6).toString();
-        annotation.excerpt = query.value(7).toString();
-        annotation.note = query.value(8).toString();
-        annotation.createdAt = dateTimeFromStorage(query.value(9).toString());
-        annotations.append(annotation);
+        annotations.append(annotationFromQuery(query));
+    }
+    return annotations;
+}
+
+QVector<LibraryReadingAnnotation> ProfileDatabase::libraryAnnotations() const
+{
+    QVector<LibraryReadingAnnotation> annotations;
+    QSqlQuery query(m_database);
+    query.prepare(QStringLiteral(
+        "SELECT b.source_url, b.title, b.author, b.format_name, "
+        "a.id, a.type, a.progress, a.page, a.start_position, a.selection_length, "
+        "a.label, a.excerpt, a.note, a.created_at "
+        "FROM annotations a JOIN books b ON b.id = a.book_id "
+        "WHERE b.in_library = 1 ORDER BY a.created_at DESC, b.title, a.progress"));
+    if (!query.exec()) {
+        setLastError(query.lastError().text());
+        return annotations;
+    }
+
+    while (query.next()) {
+        LibraryReadingAnnotation entry;
+        entry.sourceUrl = QUrl(query.value(0).toString());
+        entry.bookTitle = query.value(1).toString();
+        entry.bookAuthor = query.value(2).toString();
+        entry.formatName = query.value(3).toString();
+        entry.annotation = annotationFromQuery(query, 4);
+        annotations.append(entry);
     }
     return annotations;
 }

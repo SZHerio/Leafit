@@ -80,6 +80,8 @@ target_sources(appSZHBooks PRIVATE
     library/librarymodel.h
     library/libraryrepository.cpp
     library/libraryrepository.h
+    notes/notescentermodel.cpp
+    notes/notescentermodel.h
     localization/localizationcontroller.cpp
     localization/localizationcontroller.h
     localdocumentloader.cpp
@@ -140,6 +142,7 @@ qt_add_qml_module(appSZHBooks
         library/LibrarySyncBar.qml
         library/LibraryView.qml
         library/SyncCenterDialog.qml
+        notes/NotesCenterDialog.qml
         reader/EmptyReaderView.qml
         reader/PageNavigationControl.qml
         reader/PdfDocumentView.qml
@@ -506,6 +509,34 @@ if(BUILD_TESTING)
                 "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
         )
 
+        qt_add_executable(tst_notescenter
+            notes/notescentermodel.cpp
+            notes/notescentermodel.h
+            reader/readingannotation.h
+            reader/readingtypography.h
+            storage/documentstoragekey.cpp
+            storage/documentstoragekey.h
+            storage/localstatestore.cpp
+            storage/localstatestore.h
+            storage/profiledatabase.cpp
+            storage/profiledatabase.h
+            storage/readingannotationstore.cpp
+            storage/readingannotationstore.h
+            tests/notescentertest.cpp
+        )
+        target_link_libraries(tst_notescenter
+            PRIVATE
+                Qt6::Core
+                Qt6::Sql
+                Qt6::Test
+        )
+
+        add_test(NAME notescenter COMMAND tst_notescenter)
+        set_tests_properties(notescenter PROPERTIES
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
+        )
+
         qt_add_executable(tst_libraryservices
             archive/ziparchivereader.cpp
             archive/ziparchivereader.h
@@ -588,6 +619,7 @@ if(BUILD_TESTING)
                     library/LibraryImportProgress.qml
                     library/LibrarySyncBar.qml
                     library/SyncCenterDialog.qml
+                    notes/NotesCenterDialog.qml
                     shell/ProfileRestoreDialog.qml
                     shell/AppShortcuts.qml
                     reader/PageNavigationControl.qml
@@ -602,6 +634,7 @@ if(BUILD_TESTING)
                     ui/SZHSegmentedControl.qml
                     ui/SZHSlider.qml
                     ui/SZHSurface.qml
+                    ui/SZHTextArea.qml
                     ui/SZHTextField.qml
                     ui/Theme.qml
             )
