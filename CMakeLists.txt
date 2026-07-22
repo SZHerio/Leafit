@@ -11,7 +11,7 @@ if(WIN32)
     set(CMAKE_INSTALL_BINDIR ".")
 endif()
 
-find_package(Qt6 REQUIRED COMPONENTS Concurrent Gui LinguistTools Pdf PdfQuick Quick QuickControls2 QuickDialogs2 Xml)
+find_package(Qt6 REQUIRED COMPONENTS Concurrent Gui LinguistTools Pdf PdfQuick Quick QuickControls2 QuickDialogs2 Sql Xml)
 
 qt_standard_project_setup(REQUIRES 6.8)
 
@@ -94,6 +94,8 @@ target_sources(appSZHBooks PRIVATE
     storage/localstatestore.h
     storage/profilearchiveservice.cpp
     storage/profilearchiveservice.h
+    storage/profiledatabase.cpp
+    storage/profiledatabase.h
     storage/profilestorage.h
     storage/readingannotationstore.cpp
     storage/readingannotationstore.h
@@ -211,6 +213,7 @@ target_link_libraries(appSZHBooks
         Qt6::Quick
         Qt6::QuickControls2
         Qt6::QuickDialogs2
+        Qt6::Sql
         Qt6::Xml
 )
 
@@ -266,17 +269,19 @@ if(BUILD_TESTING)
             storage/documentstoragekey.h
             storage/localstatestore.cpp
             storage/localstatestore.h
+            storage/profiledatabase.cpp
+            storage/profiledatabase.h
             storage/readingannotationstore.cpp
             storage/readingannotationstore.h
             tests/localstatestoretest.cpp
         )
-
         target_link_libraries(tst_localstatestore
             PRIVATE
                 szhbooks_miniz
                 Qt6::Core
                 Qt6::Gui
                 Qt6::Pdf
+                Qt6::Sql
                 Qt6::Test
                 Qt6::Xml
         )
@@ -300,16 +305,18 @@ if(BUILD_TESTING)
             storage/localstatestore.h
             storage/profilearchiveservice.cpp
             storage/profilearchiveservice.h
+            storage/profiledatabase.cpp
+            storage/profiledatabase.h
             storage/profilestorage.h
             storage/readingannotationstore.cpp
             storage/readingannotationstore.h
             tests/profilearchiveservicetest.cpp
         )
-
         target_link_libraries(tst_profilearchive
             PRIVATE
                 szhbooks_miniz
                 Qt6::Core
+                Qt6::Sql
                 Qt6::Test
         )
 
@@ -339,6 +346,8 @@ if(BUILD_TESTING)
             storage/documentstoragekey.h
             storage/localstatestore.cpp
             storage/localstatestore.h
+            storage/profiledatabase.cpp
+            storage/profiledatabase.h
             storage/profilestorage.h
             storage/readingannotationstore.cpp
             storage/readingannotationstore.h
@@ -356,7 +365,6 @@ if(BUILD_TESTING)
             sync/syncconflictmodel.h
             tests/onedrivesynctest.cpp
         )
-
         target_link_libraries(tst_onedrivesync
             PRIVATE
                 szhbooks_miniz
@@ -364,6 +372,7 @@ if(BUILD_TESTING)
                 Qt6::Core
                 Qt6::Gui
                 Qt6::Pdf
+                Qt6::Sql
                 Qt6::Test
                 Qt6::Xml
         )
@@ -394,11 +403,12 @@ if(BUILD_TESTING)
             storage/documentstoragekey.h
             storage/localstatestore.cpp
             storage/localstatestore.h
+            storage/profiledatabase.cpp
+            storage/profiledatabase.h
             storage/readingannotationstore.cpp
             storage/readingannotationstore.h
             tests/libraryfileservicetest.cpp
         )
-
         target_link_libraries(tst_libraryfiles
             PRIVATE
                 szhbooks_miniz
@@ -406,6 +416,7 @@ if(BUILD_TESTING)
                 Qt6::Core
                 Qt6::Gui
                 Qt6::Pdf
+                Qt6::Sql
                 Qt6::Test
                 Qt6::Xml
         )
@@ -439,7 +450,6 @@ if(BUILD_TESTING)
             documentreaders.h
             tests/documentreaderstest.cpp
         )
-
         target_link_libraries(tst_documentreaders
             PRIVATE
                 szhbooks_miniz
@@ -461,15 +471,17 @@ if(BUILD_TESTING)
             reader/readingsearchcontroller.h
             storage/documentstoragekey.cpp
             storage/documentstoragekey.h
+            storage/profiledatabase.cpp
+            storage/profiledatabase.h
             storage/readingannotationstore.cpp
             storage/readingannotationstore.h
             tests/readingfeaturestest.cpp
         )
-
         target_link_libraries(tst_readingfeatures
             PRIVATE
                 Qt6::Gui
                 Qt6::Quick
+                Qt6::Sql
                 Qt6::Test
         )
 
@@ -489,7 +501,6 @@ if(BUILD_TESTING)
             library/bookmetadataservice.h
             tests/libraryservicestest.cpp
         )
-
         target_link_libraries(tst_libraryservices
             PRIVATE
                 szhbooks_miniz
@@ -513,14 +524,16 @@ if(BUILD_TESTING)
             storage/documentstoragekey.h
             storage/localstatestore.cpp
             storage/localstatestore.h
+            storage/profiledatabase.cpp
+            storage/profiledatabase.h
             storage/profilestorage.h
             tests/localizationcontrollertest.cpp
         )
-
         target_link_libraries(tst_localizationcontroller
             PRIVATE
                 Qt6::Gui
                 Qt6::Qml
+                Qt6::Sql
                 Qt6::Test
         )
         target_include_directories(tst_localizationcontroller PRIVATE

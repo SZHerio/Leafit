@@ -1,8 +1,9 @@
 #include "readingannotationstore.h"
 
-#include "documentstoragekey.h"
+#include "profiledatabase.h"
 
 #include <QRegularExpression>
+#include <QSettings>
 #include <QUuid>
 
 #include <algorithm>
@@ -22,9 +23,22 @@ qreal boundedProgress(qreal progress)
 
 ReadingAnnotationStore::ReadingAnnotationStore(const QString &settingsFilePath, QObject *parent)
     : QObject(parent)
-    , m_settings(settingsFilePath, QSettings::IniFormat)
+    , m_ownedDatabase(std::make_unique<ProfileDatabase>(
+          ProfileDatabase::databasePathForSettings(settingsFilePath)))
+    , m_database(m_ownedDatabase.get())
 {
+    QSettings settings(settingsFilePath, QSettings::IniFormat);
+    m_database->migrateLegacySettings(&settings);
 }
+
+ReadingAnnotationStore::ReadingAnnotationStore(ProfileDatabase *database, QObject *parent)
+    : QObject(parent)
+    , m_database(database)
+{
+    Q_ASSERT(m_database);
+}
+
+ReadingAnnotationStore::~ReadingAnnotationStore() = default;
 
 QUrl ReadingAnnotationStore::documentUrl() const
 {
@@ -84,8 +98,10 @@ bool ReadingAnnotationStore::toggleBookmark(qreal progress, int page, const QStr
     const int existingIndex = bookmarkIndex(progress, page);
     if (existingIndex >= 0) {
         const QString annotationId = m_annotations.at(existingIndex).id;
+        if (!removeStoredAnnotation(annotationId)) {
+            return true;
+        }
         m_annotations.removeAt(existingIndex);
-        removeStoredAnnotation(annotationId);
         emit annotationsChanged();
         emit profileChanged();
         return false;
@@ -98,9 +114,11 @@ bool ReadingAnnotationStore::toggleBookmark(qreal progress, int page, const QStr
     annotation.page = page;
     annotation.label = label.trimmed();
     annotation.createdAt = QDateTime::currentDateTimeUtc();
+    if (!saveAnnotation(annotation)) {
+        return false;
+    }
     m_annotations.append(annotation);
     sortAnnotations();
-    saveAnnotation(annotation);
     emit annotationsChanged();
     emit profileChanged();
     return true;
@@ -133,8 +151,12 @@ QString ReadingAnnotationStore::addHighlight(int start,
                                       && annotation.page == page
                                       && annotation.excerpt == cleanExcerpt;
         if (sameTextRange || samePdfSelection) {
-            annotation.note = normalizedNote(note);
-            saveAnnotation(annotation);
+            ReadingAnnotation updated = annotation;
+            updated.note = normalizedNote(note);
+            if (!saveAnnotation(updated)) {
+                return {};
+            }
+            annotation = updated;
             emit annotationsChanged();
             emit profileChanged();
             return annotation.id;
@@ -151,9 +173,11 @@ QString ReadingAnnotationStore::addHighlight(int start,
     annotation.excerpt = cleanExcerpt;
     annotation.note = normalizedNote(note);
     annotation.createdAt = QDateTime::currentDateTimeUtc();
+    if (!saveAnnotation(annotation)) {
+        return {};
+    }
     m_annotations.append(annotation);
     sortAnnotations();
-    saveAnnotation(annotation);
     emit annotationsChanged();
     emit profileChanged();
     return annotation.id;
@@ -170,8 +194,12 @@ void ReadingAnnotationStore::updateNote(const QString &annotationId, const QStri
         if (annotation.note == cleanNote) {
             return;
         }
-        annotation.note = cleanNote;
-        saveAnnotation(annotation);
+        ReadingAnnotation updated = annotation;
+        updated.note = cleanNote;
+        if (!saveAnnotation(updated)) {
+            return;
+        }
+        annotation = updated;
         emit annotationsChanged();
         emit profileChanged();
         return;
@@ -189,22 +217,23 @@ void ReadingAnnotationStore::removeAnnotation(const QString &annotationId)
         return;
     }
 
+    if (!removeStoredAnnotation(annotationId)) {
+        return;
+    }
     m_annotations.erase(iterator);
-    removeStoredAnnotation(annotationId);
     emit annotationsChanged();
     emit profileChanged();
 }
 
 void ReadingAnnotationStore::reload()
 {
-    m_settings.sync();
     loadAnnotations();
     emit annotationsChanged();
 }
 
 void ReadingAnnotationStore::sync()
 {
-    m_settings.sync();
+    m_database->sync();
 }
 
 QVariantMap ReadingAnnotationStore::toVariantMap(const ReadingAnnotation &annotation)
@@ -246,13 +275,6 @@ QString ReadingAnnotationStore::typeName(ReadingAnnotationType type)
                : QStringLiteral("highlight");
 }
 
-ReadingAnnotationType ReadingAnnotationStore::typeFromName(const QString &name)
-{
-    return name == QLatin1String("highlight")
-               ? ReadingAnnotationType::Highlight
-               : ReadingAnnotationType::Bookmark;
-}
-
 int ReadingAnnotationStore::bookmarkIndex(qreal progress, int page) const
 {
     progress = boundedProgress(progress);
@@ -273,83 +295,30 @@ int ReadingAnnotationStore::bookmarkIndex(qreal progress, int page) const
     return -1;
 }
 
-QString ReadingAnnotationStore::documentGroup() const
-{
-    return QStringLiteral("annotations/%1").arg(DocumentStorageKey::id(m_documentUrl));
-}
-
 void ReadingAnnotationStore::loadAnnotations()
 {
     m_annotations.clear();
     if (m_documentUrl.isEmpty()) {
         return;
     }
-
-    m_settings.sync();
-    m_settings.beginGroup(documentGroup());
-    const QStringList annotationIds = m_settings.childGroups();
-    m_annotations.reserve(annotationIds.size());
-    for (const QString &annotationId : annotationIds) {
-        m_settings.beginGroup(annotationId);
-        ReadingAnnotation annotation;
-        annotation.id = annotationId;
-        annotation.type = typeFromName(m_settings.value(QStringLiteral("type")).toString());
-        annotation.progress = boundedProgress(
-            m_settings.value(QStringLiteral("progress"), 0).toReal());
-        annotation.page = m_settings.value(QStringLiteral("page"), -1).toInt();
-        annotation.start = m_settings.value(QStringLiteral("start"), -1).toInt();
-        annotation.length = qMax(0, m_settings.value(QStringLiteral("length"), 0).toInt());
-        annotation.label = m_settings.value(QStringLiteral("label")).toString();
-        annotation.excerpt = m_settings.value(QStringLiteral("excerpt")).toString();
-        annotation.note = m_settings.value(QStringLiteral("note")).toString();
-        annotation.createdAt = QDateTime::fromString(
-            m_settings.value(QStringLiteral("createdAt")).toString(), Qt::ISODateWithMs);
-        if (!annotation.createdAt.isValid()) {
-            annotation.createdAt = QDateTime::fromString(
-                m_settings.value(QStringLiteral("createdAt")).toString(), Qt::ISODate);
-        }
-        m_annotations.append(annotation);
-        m_settings.endGroup();
-    }
-    m_settings.endGroup();
+    m_annotations = m_database->annotations(m_documentUrl);
     sortAnnotations();
 }
 
-void ReadingAnnotationStore::saveAnnotation(const ReadingAnnotation &annotation)
+bool ReadingAnnotationStore::saveAnnotation(const ReadingAnnotation &annotation)
 {
     if (m_documentUrl.isEmpty()) {
-        return;
+        return false;
     }
-
-    m_settings.beginGroup(documentGroup());
-    m_settings.setValue(QStringLiteral("sourceUrl"),
-                        m_documentUrl.toString(QUrl::FullyEncoded));
-    m_settings.beginGroup(annotation.id);
-    m_settings.setValue(QStringLiteral("type"), typeName(annotation.type));
-    m_settings.setValue(QStringLiteral("progress"), annotation.progress);
-    m_settings.setValue(QStringLiteral("page"), annotation.page);
-    m_settings.setValue(QStringLiteral("start"), annotation.start);
-    m_settings.setValue(QStringLiteral("length"), annotation.length);
-    m_settings.setValue(QStringLiteral("label"), annotation.label);
-    m_settings.setValue(QStringLiteral("excerpt"), annotation.excerpt);
-    m_settings.setValue(QStringLiteral("note"), annotation.note);
-    m_settings.setValue(QStringLiteral("createdAt"),
-                        annotation.createdAt.toString(Qt::ISODateWithMs));
-    m_settings.endGroup();
-    m_settings.endGroup();
-    m_settings.sync();
+    return m_database->saveAnnotation(m_documentUrl, annotation);
 }
 
-void ReadingAnnotationStore::removeStoredAnnotation(const QString &annotationId)
+bool ReadingAnnotationStore::removeStoredAnnotation(const QString &annotationId)
 {
     if (m_documentUrl.isEmpty()) {
-        return;
+        return false;
     }
-
-    m_settings.beginGroup(documentGroup());
-    m_settings.remove(annotationId);
-    m_settings.endGroup();
-    m_settings.sync();
+    return m_database->removeAnnotation(m_documentUrl, annotationId);
 }
 
 void ReadingAnnotationStore::sortAnnotations()

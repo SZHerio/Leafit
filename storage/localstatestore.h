@@ -1,6 +1,7 @@
 #pragma once
 
 #include "../library/librarybook.h"
+#include "profiledatabase.h"
 #include "profilestorage.h"
 
 #include <QObject>
@@ -43,6 +44,8 @@ public:
     QString librarySortMode() const;
     QString libraryViewMode() const;
     QString settingsFilePath() const;
+    QString databaseFilePath() const;
+    ProfileDatabase *profileDatabase();
     QVariantMap profileValues() const override;
     bool replaceProfileValues(const QVariantMap &values,
                               QString *errorMessage = nullptr) override;
@@ -117,12 +120,11 @@ signals:
 
 private:
     static QString defaultSettingsFilePath();
-    static QString documentKey(const QUrl &documentUrl, const QString &name);
     void loadCachedState();
     void emitProfileSignals();
-    void rememberDocumentUrl(const QUrl &documentUrl);
 
     mutable QSettings m_settings;
+    ProfileDatabase m_profileDatabase;
     QString m_colorTheme = QStringLiteral("light");
     QString m_language = QStringLiteral("system");
     QString m_readingFont = QStringLiteral("serif");

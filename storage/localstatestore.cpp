@@ -1,16 +1,12 @@
 #include "localstatestore.h"
 
-#include "documentstoragekey.h"
-
 #include <QCoreApplication>
-#include <QDateTime>
+#include <QDebug>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <QVariantMap>
-
-#include <algorithm>
 
 namespace {
 
@@ -28,18 +24,10 @@ constexpr int minimumScrollSpeed = 50;
 constexpr int maximumScrollSpeed = 200;
 constexpr int scrollSpeedStep = 10;
 constexpr int legacyNormalWheelScrollLines = 6;
-constexpr qreal minimumPdfScale = 0.4;
-constexpr qreal maximumPdfScale = 3.0;
-
 const QString defaultColorTheme = QStringLiteral("light");
 const QString defaultLanguage = QStringLiteral("system");
 const QString defaultReadingFont = QStringLiteral("serif");
 const QString defaultTextAlignment = QStringLiteral("justify");
-
-QString serializedUrl(const QUrl &url)
-{
-    return url.toString(QUrl::FullyEncoded);
-}
 
 int normalizedScrollSpeed(int scrollSpeed)
 {
@@ -101,33 +89,6 @@ QString normalizedCollectionPath(QString collectionPath)
     collectionPath.replace(u'\\', u'/');
     collectionPath = QDir::cleanPath(collectionPath.trimmed());
     return collectionPath == QLatin1String(".") ? QString() : collectionPath;
-}
-
-QVariantMap settingsGroupValues(QSettings *settings, const QString &group)
-{
-    QVariantMap values;
-    settings->beginGroup(group);
-    for (const QString &key : settings->allKeys()) {
-        values.insert(key, settings->value(key));
-    }
-    settings->endGroup();
-    return values;
-}
-
-void replaceSettingsGroup(QSettings *settings,
-                          const QString &group,
-                          const QVariantMap &values)
-{
-    settings->remove(group);
-    if (values.isEmpty()) {
-        return;
-    }
-
-    settings->beginGroup(group);
-    for (auto value = values.cbegin(); value != values.cend(); ++value) {
-        settings->setValue(value.key(), value.value());
-    }
-    settings->endGroup();
 }
 
 QString configDirectoryForIdentity(const QString &organizationName,
@@ -200,7 +161,12 @@ LocalStateStore::LocalStateStore(QObject *parent)
 LocalStateStore::LocalStateStore(const QString &settingsFilePath, QObject *parent)
     : QObject(parent)
     , m_settings(settingsFilePath, QSettings::IniFormat)
+    , m_profileDatabase(ProfileDatabase::databasePathForSettings(settingsFilePath))
 {
+    QString migrationError;
+    if (!m_profileDatabase.migrateLegacySettings(&m_settings, &migrationError)) {
+        qWarning() << "Could not migrate the local profile to SQLite:" << migrationError;
+    }
     loadCachedState();
 }
 
@@ -274,7 +240,7 @@ void LocalStateStore::loadCachedState()
         m_settings.setValue(scrollSpeedKey, m_scrollSpeed);
         m_settings.remove(legacyScrollLinesKey);
     }
-    m_lastBookUrl = QUrl(m_settings.value(QStringLiteral("session/lastBookUrl")).toString());
+    m_lastBookUrl = m_profileDatabase.lastBookUrl();
     m_librarySortMode = normalizedLibrarySortMode(
         m_settings.value(QStringLiteral("library/sortMode"), QStringLiteral("recent")).toString());
     m_libraryViewMode = normalizedLibraryViewMode(
@@ -356,10 +322,20 @@ QString LocalStateStore::settingsFilePath() const
     return m_settings.fileName();
 }
 
+QString LocalStateStore::databaseFilePath() const
+{
+    return m_profileDatabase.filePath();
+}
+
+ProfileDatabase *LocalStateStore::profileDatabase()
+{
+    return &m_profileDatabase;
+}
+
 QVariantMap LocalStateStore::profileValues() const
 {
     m_settings.sync();
-    QVariantMap values;
+    QVariantMap values = m_profileDatabase.profileValues();
     for (const QString &key : m_settings.allKeys()) {
         values.insert(key, m_settings.value(key));
     }
@@ -370,17 +346,50 @@ bool LocalStateStore::replaceProfileValues(const QVariantMap &values,
                                            QString *errorMessage)
 {
     const QVariantMap previousValues = profileValues();
-    const auto writeValues = [this](const QVariantMap &profileValues) {
-        m_settings.clear();
+    const auto settingsValues = [](const QVariantMap &profileValues) {
+        QVariantMap result;
         for (auto value = profileValues.cbegin(); value != profileValues.cend(); ++value) {
+            if (!value.key().startsWith(QStringLiteral("documents/"))
+                && !value.key().startsWith(QStringLiteral("annotations/"))
+                && value.key() != QLatin1String("session/lastBookUrl")) {
+                result.insert(value.key(), value.value());
+            }
+        }
+        return result;
+    };
+    const auto databaseValues = [](const QVariantMap &profileValues) {
+        QVariantMap result;
+        for (auto value = profileValues.cbegin(); value != profileValues.cend(); ++value) {
+            if (value.key().startsWith(QStringLiteral("documents/"))
+                || value.key().startsWith(QStringLiteral("annotations/"))
+                || value.key() == QLatin1String("session/lastBookUrl")) {
+                result.insert(value.key(), value.value());
+            }
+        }
+        return result;
+    };
+    const auto writeSettingsValues = [this, &settingsValues](const QVariantMap &profileValues) {
+        m_settings.clear();
+        const QVariantMap filteredValues = settingsValues(profileValues);
+        for (auto value = filteredValues.cbegin(); value != filteredValues.cend(); ++value) {
             m_settings.setValue(value.key(), value.value());
         }
         m_settings.sync();
         return m_settings.status() == QSettings::NoError;
     };
 
-    if (!writeValues(values)) {
-        writeValues(previousValues);
+    QString databaseError;
+    if (!m_profileDatabase.replaceProfileValues(databaseValues(values), &databaseError)) {
+        qWarning() << "Could not replace the SQLite profile:" << databaseError;
+        if (errorMessage) {
+            *errorMessage = tr("The profile database could not be updated.");
+        }
+        return false;
+    }
+
+    if (!writeSettingsValues(values)) {
+        m_profileDatabase.replaceProfileValues(databaseValues(previousValues));
+        writeSettingsValues(previousValues);
         if (errorMessage) {
             *errorMessage = tr("The settings file could not be updated.");
         }
@@ -545,12 +554,10 @@ void LocalStateStore::setLastBookUrl(const QUrl &lastBookUrl)
         return;
     }
 
-    m_lastBookUrl = lastBookUrl;
-    if (lastBookUrl.isEmpty()) {
-        m_settings.remove(QStringLiteral("session/lastBookUrl"));
-    } else {
-        m_settings.setValue(QStringLiteral("session/lastBookUrl"), serializedUrl(lastBookUrl));
+    if (!m_profileDatabase.setLastBookUrl(lastBookUrl)) {
+        return;
     }
+    m_lastBookUrl = lastBookUrl;
     emit lastBookUrlChanged();
     emit profileChanged();
 }
@@ -579,21 +586,17 @@ void LocalStateStore::setLibraryViewMode(const QString &viewMode)
 
 qreal LocalStateStore::textPosition(const QUrl &documentUrl) const
 {
-    return qBound(qreal(0),
-                  m_settings.value(documentKey(documentUrl, QStringLiteral("textProgress")), 0).toReal(),
-                  qreal(1));
+    return m_profileDatabase.textPosition(documentUrl);
 }
 
 int LocalStateStore::pdfPage(const QUrl &documentUrl) const
 {
-    return qMax(0, m_settings.value(documentKey(documentUrl, QStringLiteral("pdfPage")), 0).toInt());
+    return m_profileDatabase.pdfPage(documentUrl);
 }
 
 qreal LocalStateStore::pdfScale(const QUrl &documentUrl) const
 {
-    return qBound(minimumPdfScale,
-                  m_settings.value(documentKey(documentUrl, QStringLiteral("pdfScale")), 1).toReal(),
-                  maximumPdfScale);
+    return m_profileDatabase.pdfScale(documentUrl);
 }
 
 void LocalStateStore::saveTextPosition(const QUrl &documentUrl, qreal progress)
@@ -603,9 +606,9 @@ void LocalStateStore::saveTextPosition(const QUrl &documentUrl, qreal progress)
     }
 
     progress = qBound(qreal(0), progress, qreal(1));
-    rememberDocumentUrl(documentUrl);
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("textProgress")), progress);
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("readingProgress")), progress);
+    if (!m_profileDatabase.saveTextPosition(documentUrl, progress)) {
+        return;
+    }
     emit documentProgressChanged(documentUrl, progress);
     emit profileChanged();
 }
@@ -619,12 +622,10 @@ void LocalStateStore::savePdfPosition(const QUrl &documentUrl,
         return;
     }
 
-    rememberDocumentUrl(documentUrl);
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("pdfPage")), qMax(0, page));
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("pdfScale")),
-                        qBound(minimumPdfScale, scale, maximumPdfScale));
     progress = qBound(qreal(0), progress, qreal(1));
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("readingProgress")), progress);
+    if (!m_profileDatabase.savePdfPosition(documentUrl, page, scale, progress)) {
+        return;
+    }
     emit documentProgressChanged(documentUrl, progress);
     emit profileChanged();
 }
@@ -645,67 +646,7 @@ void LocalStateStore::resetReadingPreferences()
 
 QVector<LibraryBook> LocalStateStore::libraryBooks() const
 {
-    QVector<LibraryBook> books;
-
-    m_settings.beginGroup(QStringLiteral("documents"));
-    const QStringList documentIds = m_settings.childGroups();
-    books.reserve(documentIds.size());
-    for (const QString &documentId : documentIds) {
-        m_settings.beginGroup(documentId);
-        if (!m_settings.value(QStringLiteral("inLibrary"), false).toBool()) {
-            m_settings.endGroup();
-            continue;
-        }
-
-        LibraryBook book;
-        book.sourceUrl = QUrl(m_settings.value(QStringLiteral("sourceUrl")).toString());
-        if (book.sourceUrl.isEmpty()) {
-            m_settings.endGroup();
-            continue;
-        }
-
-        const QFileInfo fileInfo(book.sourceUrl.toLocalFile());
-        book.sourcePath = book.sourceUrl.isLocalFile()
-                              ? fileInfo.absoluteFilePath()
-                              : book.sourceUrl.toDisplayString();
-        book.title = m_settings.value(QStringLiteral("title")).toString().trimmed();
-        if (book.title.isEmpty()) {
-            book.title = fileInfo.completeBaseName();
-        }
-        book.author = m_settings.value(QStringLiteral("author")).toString().trimmed();
-        book.formatName = m_settings.value(QStringLiteral("formatName")).toString().trimmed();
-        if (book.formatName.isEmpty()) {
-            book.formatName = fileInfo.suffix().toUpper();
-        }
-        book.collectionPath = normalizedCollectionPath(
-            m_settings.value(QStringLiteral("collectionPath")).toString());
-        book.metadataFingerprint = m_settings.value(
-            QStringLiteral("metadataFingerprint")).toString();
-        book.coverUrl = QUrl(m_settings.value(QStringLiteral("coverUrl")).toString());
-        book.progress = qBound(
-            qreal(0),
-            m_settings.value(QStringLiteral("readingProgress"),
-                             m_settings.value(QStringLiteral("textProgress"), 0)).toReal(),
-            qreal(1));
-        book.lastOpened = QDateTime::fromString(
-            m_settings.value(QStringLiteral("lastOpened")).toString(), Qt::ISODateWithMs);
-        if (!book.lastOpened.isValid()) {
-            book.lastOpened = QDateTime::fromString(
-                m_settings.value(QStringLiteral("lastOpened")).toString(), Qt::ISODate);
-        }
-        book.fileAvailable = !book.sourceUrl.isLocalFile() || fileInfo.exists();
-        books.append(book);
-        m_settings.endGroup();
-    }
-    m_settings.endGroup();
-
-    std::sort(books.begin(), books.end(), [](const LibraryBook &left, const LibraryBook &right) {
-        if (left.lastOpened != right.lastOpened) {
-            return left.lastOpened > right.lastOpened;
-        }
-        return QString::localeAwareCompare(left.title, right.title) < 0;
-    });
-    return books;
+    return m_profileDatabase.libraryBooks();
 }
 
 void LocalStateStore::recordBookOpened(const QUrl &documentUrl,
@@ -717,14 +658,9 @@ void LocalStateStore::recordBookOpened(const QUrl &documentUrl,
         return;
     }
 
-    rememberDocumentUrl(documentUrl);
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("inLibrary")), true);
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("title")), title.trimmed());
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("author")), author.trimmed());
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("formatName")),
-                        formatName.trimmed());
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("lastOpened")),
-                        QDateTime::currentDateTimeUtc().toString(Qt::ISODateWithMs));
+    if (!m_profileDatabase.recordBookOpened(documentUrl, title, author, formatName)) {
+        return;
+    }
     emit libraryChanged();
     emit profileChanged();
 }
@@ -741,19 +677,14 @@ void LocalStateStore::registerLibraryBook(const QUrl &documentUrl,
         return;
     }
 
-    rememberDocumentUrl(documentUrl);
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("inLibrary")), true);
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("title")), title.trimmed());
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("author")), author.trimmed());
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("formatName")),
-                        formatName.trimmed());
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("collectionPath")),
-                        normalizedCollectionPath(collectionPath));
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("metadataFingerprint")),
-                        metadataFingerprint);
-    if (!coverUrl.isEmpty()) {
-        m_settings.setValue(documentKey(documentUrl, QStringLiteral("coverUrl")),
-                            serializedUrl(coverUrl));
+    if (!m_profileDatabase.registerLibraryBook(documentUrl,
+                                               title,
+                                               author,
+                                               formatName,
+                                               coverUrl,
+                                               metadataFingerprint,
+                                               collectionPath)) {
+        return;
     }
     emit libraryChanged();
     emit profileChanged();
@@ -770,33 +701,25 @@ void LocalStateStore::updateBookMetadata(const QUrl &documentUrl,
         return;
     }
 
-    rememberDocumentUrl(documentUrl);
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("title")), title.trimmed());
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("author")), author.trimmed());
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("formatName")),
-                        formatName.trimmed());
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("metadataFingerprint")),
-                        metadataFingerprint);
-    if (coverUrl.isEmpty()) {
-        m_settings.remove(documentKey(documentUrl, QStringLiteral("coverUrl")));
-    } else {
-        m_settings.setValue(documentKey(documentUrl, QStringLiteral("coverUrl")),
-                            serializedUrl(coverUrl));
+    if (!m_profileDatabase.updateBookMetadata(documentUrl,
+                                              title,
+                                              author,
+                                              formatName,
+                                              coverUrl,
+                                              metadataFingerprint)) {
+        return;
     }
     emit profileChanged();
 }
 
 bool LocalStateStore::containsLibraryBook(const QUrl &documentUrl) const
 {
-    return !documentUrl.isEmpty()
-           && m_settings.value(documentKey(documentUrl, QStringLiteral("inLibrary")), false)
-                  .toBool();
+    return !documentUrl.isEmpty() && m_profileDatabase.containsLibraryBook(documentUrl);
 }
 
 bool LocalStateStore::hasLibraryRecord(const QUrl &documentUrl) const
 {
-    return !documentUrl.isEmpty()
-           && m_settings.contains(documentKey(documentUrl, QStringLiteral("inLibrary")));
+    return !documentUrl.isEmpty() && m_profileDatabase.hasLibraryRecord(documentUrl);
 }
 
 void LocalStateStore::setBookCollection(const QUrl &documentUrl,
@@ -806,12 +729,10 @@ void LocalStateStore::setBookCollection(const QUrl &documentUrl,
         return;
     }
 
-    const QString key = documentKey(documentUrl, QStringLiteral("collectionPath"));
     const QString normalizedPath = normalizedCollectionPath(collectionPath);
-    if (normalizedCollectionPath(m_settings.value(key).toString()) == normalizedPath) {
+    if (!m_profileDatabase.setBookCollection(documentUrl, normalizedPath)) {
         return;
     }
-    m_settings.setValue(key, normalizedPath);
     emit libraryChanged();
     emit profileChanged();
 }
@@ -822,7 +743,9 @@ void LocalStateStore::removeFromLibrary(const QUrl &documentUrl)
         return;
     }
 
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("inLibrary")), false);
+    if (!m_profileDatabase.removeFromLibrary(documentUrl)) {
+        return;
+    }
     if (m_lastBookUrl == documentUrl) {
         setLastBookUrl({});
     }
@@ -837,45 +760,12 @@ bool LocalStateStore::relinkDocument(const QUrl &oldDocumentUrl,
         return false;
     }
 
-    const QString oldId = DocumentStorageKey::id(oldDocumentUrl);
-    const QString newId = DocumentStorageKey::id(newDocumentUrl);
-    const QString oldDocumentGroup = QStringLiteral("documents/%1").arg(oldId);
-    QVariantMap documentValues = settingsGroupValues(&m_settings, oldDocumentGroup);
-    if (documentValues.isEmpty()
-        || !documentValues.value(QStringLiteral("inLibrary"), false).toBool()) {
+    if (!m_profileDatabase.relinkDocument(oldDocumentUrl, newDocumentUrl)) {
         return false;
     }
-
-    documentValues.insert(QStringLiteral("sourceUrl"), serializedUrl(newDocumentUrl));
-    documentValues.remove(QStringLiteral("metadataFingerprint"));
-    documentValues.remove(QStringLiteral("coverUrl"));
-
-    const QString oldAnnotationGroup = QStringLiteral("annotations/%1").arg(oldId);
-    QVariantMap annotationValues = settingsGroupValues(&m_settings, oldAnnotationGroup);
-    if (!annotationValues.isEmpty()) {
-        annotationValues.insert(QStringLiteral("sourceUrl"), serializedUrl(newDocumentUrl));
-    }
-
-    const QString newDocumentGroup = QStringLiteral("documents/%1").arg(newId);
-    const QString newAnnotationGroup = QStringLiteral("annotations/%1").arg(newId);
-    if (oldId != newId && containsLibraryBook(newDocumentUrl)) {
-        return false;
-    }
-
-    if (oldId != newId) {
-        replaceSettingsGroup(&m_settings, newDocumentGroup, documentValues);
-        replaceSettingsGroup(&m_settings, newAnnotationGroup, annotationValues);
-        m_settings.remove(oldDocumentGroup);
-        m_settings.remove(oldAnnotationGroup);
-    } else {
-        replaceSettingsGroup(&m_settings, oldDocumentGroup, documentValues);
-        replaceSettingsGroup(&m_settings, oldAnnotationGroup, annotationValues);
-    }
-
     if (m_lastBookUrl == oldDocumentUrl) {
         setLastBookUrl(newDocumentUrl);
     }
-    m_settings.sync();
     emit libraryChanged();
     emit profileChanged();
     return true;
@@ -884,6 +774,7 @@ bool LocalStateStore::relinkDocument(const QUrl &oldDocumentUrl,
 void LocalStateStore::sync()
 {
     m_settings.sync();
+    m_profileDatabase.sync();
 }
 
 QString LocalStateStore::defaultSettingsFilePath()
@@ -899,17 +790,6 @@ QString LocalStateStore::defaultSettingsFilePath()
     }
 
     return migratedDefaultSettingsFilePath();
-}
-
-QString LocalStateStore::documentKey(const QUrl &documentUrl, const QString &name)
-{
-    return DocumentStorageKey::key(documentUrl, name);
-}
-
-void LocalStateStore::rememberDocumentUrl(const QUrl &documentUrl)
-{
-    m_settings.setValue(documentKey(documentUrl, QStringLiteral("sourceUrl")),
-                        serializedUrl(documentUrl));
 }
 
 void LocalStateStore::emitProfileSignals()

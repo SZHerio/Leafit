@@ -63,7 +63,7 @@ int main(int argc, char *argv[])
     ReaderController reader;
     ReadingDocumentFormatter documentFormatter;
     ReadingSearchController searchController;
-    ReadingAnnotationStore annotationStore(localState.settingsFilePath());
+    ReadingAnnotationStore annotationStore(localState.profileDatabase());
     OneDriveLibraryService oneDriveLibraryService(&localState, &libraryRepository);
 
     QObject::connect(&localState,

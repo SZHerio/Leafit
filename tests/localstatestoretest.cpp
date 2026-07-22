@@ -1,4 +1,5 @@
 #include "../storage/localstatestore.h"
+#include "../storage/documentstoragekey.h"
 #include "../storage/readingannotationstore.h"
 #include "../library/bookcoverprovider.h"
 #include "../library/bookmetadataservice.h"
@@ -20,6 +21,7 @@ private slots:
     void migratesLegacyTheme();
     void migratesRemovedSepiaTheme();
     void migratesLegacyScrollSpeed();
+    void migratesProfileDataToSqlite();
     void resetsReadingPreferences();
     void keepsIndependentDocumentPositions();
     void persistsLibraryPresentation();
@@ -132,6 +134,76 @@ void LocalStateStoreTest::migratesLegacyScrollSpeed()
     QSettings migratedSettings(settingsPath, QSettings::IniFormat);
     QCOMPARE(migratedSettings.value(QStringLiteral("reading/scrollSpeed")).toInt(), 150);
     QVERIFY(!migratedSettings.contains(QStringLiteral("reading/wheelScrollLines")));
+}
+
+void LocalStateStoreTest::migratesProfileDataToSqlite()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString settingsPath = directory.filePath(QStringLiteral("settings.ini"));
+    const QString bookPath = directory.filePath(QStringLiteral("migrated.txt"));
+    QFile bookFile(bookPath);
+    QVERIFY(bookFile.open(QIODevice::WriteOnly));
+    QVERIFY(bookFile.write("Migrated profile") > 0);
+    bookFile.close();
+
+    const QUrl bookUrl = QUrl::fromLocalFile(bookPath);
+    const QString documentId = DocumentStorageKey::id(bookUrl);
+    const QString documentPrefix = QStringLiteral("documents/%1/").arg(documentId);
+    const QString annotationPrefix = QStringLiteral("annotations/%1/").arg(documentId);
+    {
+        QSettings settings(settingsPath, QSettings::IniFormat);
+        settings.setValue(QStringLiteral("appearance/colorTheme"), QStringLiteral("dark"));
+        settings.setValue(QStringLiteral("session/lastBookUrl"),
+                          bookUrl.toString(QUrl::FullyEncoded));
+        settings.setValue(documentPrefix + QStringLiteral("sourceUrl"),
+                          bookUrl.toString(QUrl::FullyEncoded));
+        settings.setValue(documentPrefix + QStringLiteral("inLibrary"), true);
+        settings.setValue(documentPrefix + QStringLiteral("title"),
+                          QStringLiteral("Migrated title"));
+        settings.setValue(documentPrefix + QStringLiteral("author"),
+                          QStringLiteral("Migrated author"));
+        settings.setValue(documentPrefix + QStringLiteral("formatName"),
+                          QStringLiteral("TXT"));
+        settings.setValue(documentPrefix + QStringLiteral("textProgress"), 0.37);
+        settings.setValue(documentPrefix + QStringLiteral("readingProgress"), 0.37);
+        settings.setValue(annotationPrefix + QStringLiteral("sourceUrl"),
+                          bookUrl.toString(QUrl::FullyEncoded));
+        settings.setValue(annotationPrefix + QStringLiteral("bookmark-1/type"),
+                          QStringLiteral("bookmark"));
+        settings.setValue(annotationPrefix + QStringLiteral("bookmark-1/progress"), 0.37);
+        settings.setValue(annotationPrefix + QStringLiteral("bookmark-1/page"), -1);
+        settings.setValue(annotationPrefix + QStringLiteral("bookmark-1/label"),
+                          QStringLiteral("Migrated bookmark"));
+        settings.sync();
+    }
+
+    LocalStateStore store(settingsPath);
+    QCOMPARE(store.colorTheme(), QStringLiteral("dark"));
+    QCOMPARE(store.lastBookUrl(), bookUrl);
+    QCOMPARE(store.libraryBooks().size(), 1);
+    QCOMPARE(store.libraryBooks().constFirst().title, QStringLiteral("Migrated title"));
+    QVERIFY(qAbs(store.textPosition(bookUrl) - 0.37) < 0.0001);
+    QVERIFY(QFileInfo::exists(store.databaseFilePath()));
+
+    ReadingAnnotationStore annotations(store.profileDatabase());
+    annotations.setDocumentUrl(bookUrl);
+    QCOMPARE(annotations.bookmarks().size(), 1);
+
+    const QVariantMap portableContract = store.profileValues();
+    QCOMPARE(portableContract.value(documentPrefix + QStringLiteral("title")).toString(),
+             QStringLiteral("Migrated title"));
+    QCOMPARE(portableContract.value(annotationPrefix
+                                     + QStringLiteral("bookmark-1/label")).toString(),
+             QStringLiteral("Migrated bookmark"));
+
+    QSettings migratedSettings(settingsPath, QSettings::IniFormat);
+    QVERIFY(!migratedSettings.contains(QStringLiteral("session/lastBookUrl")));
+    QVERIFY(!migratedSettings.childGroups().contains(QStringLiteral("documents")));
+    QVERIFY(!migratedSettings.childGroups().contains(QStringLiteral("annotations")));
+    QCOMPARE(migratedSettings.value(QStringLiteral("appearance/colorTheme")).toString(),
+             QStringLiteral("dark"));
 }
 
 void LocalStateStoreTest::resetsReadingPreferences()

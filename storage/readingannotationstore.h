@@ -3,10 +3,13 @@
 #include "../reader/readingannotation.h"
 
 #include <QObject>
-#include <QSettings>
 #include <QUrl>
 #include <QVariantList>
 #include <QVector>
+
+#include <memory>
+
+class ProfileDatabase;
 
 class ReadingAnnotationStore final : public QObject
 {
@@ -18,6 +21,8 @@ class ReadingAnnotationStore final : public QObject
 
 public:
     explicit ReadingAnnotationStore(const QString &settingsFilePath, QObject *parent = nullptr);
+    explicit ReadingAnnotationStore(ProfileDatabase *database, QObject *parent = nullptr);
+    ~ReadingAnnotationStore() override;
 
     QUrl documentUrl() const;
     QVariantList bookmarks() const;
@@ -49,16 +54,15 @@ private:
     static QString normalizedExcerpt(const QString &text);
     static QString normalizedNote(const QString &text);
     static QString typeName(ReadingAnnotationType type);
-    static ReadingAnnotationType typeFromName(const QString &name);
 
     int bookmarkIndex(qreal progress, int page) const;
-    QString documentGroup() const;
     void loadAnnotations();
-    void saveAnnotation(const ReadingAnnotation &annotation);
-    void removeStoredAnnotation(const QString &annotationId);
+    bool saveAnnotation(const ReadingAnnotation &annotation);
+    bool removeStoredAnnotation(const QString &annotationId);
     void sortAnnotations();
 
-    mutable QSettings m_settings;
+    std::unique_ptr<ProfileDatabase> m_ownedDatabase;
+    ProfileDatabase *m_database = nullptr;
     QUrl m_documentUrl;
     QVector<ReadingAnnotation> m_annotations;
 };

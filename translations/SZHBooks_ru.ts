@@ -696,6 +696,11 @@
       <source>The settings file could not be updated.</source>
       <translation>Не удалось обновить файл настроек.</translation>
     </message>
+    <message>
+      <location filename="../storage/localstatestore.cpp" line="365" />
+      <source>The profile database could not be updated.</source>
+      <translation>Не удалось обновить базу данных профиля.</translation>
+    </message>
   </context>
   <context>
     <name>Main</name>
