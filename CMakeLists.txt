@@ -87,6 +87,7 @@ target_sources(appSZHBooks PRIVATE
     reader/readingannotation.h
     reader/readingdocumentformatter.cpp
     reader/readingdocumentformatter.h
+    reader/readingtypography.h
     reader/readingsearchcontroller.cpp
     reader/readingsearchcontroller.h
     readercontroller.cpp

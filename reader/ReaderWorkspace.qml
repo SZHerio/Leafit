@@ -9,13 +9,28 @@ Item {
     required property var searchController
     required property var annotationStore
 
-    readonly property int textFontSize: settingsStore.textFontSize
-    readonly property string textFontFamily: Theme.readingFontFamilyFor(settingsStore.readingFont)
-    readonly property int preferredPageWidth: settingsStore.pageWidth
-    readonly property real lineHeight: settingsStore.lineHeight
-    readonly property int paragraphSpacing: settingsStore.paragraphSpacing
-    readonly property int firstLineIndent: settingsStore.firstLineIndent
-    readonly property string textAlignment: settingsStore.textAlignment
+    readonly property string readingFont: bookTypographyEnabled
+                                              ? bookTypography.readingFont
+                                              : settingsStore.readingFont
+    readonly property int textFontSize: bookTypographyEnabled
+                                            ? bookTypography.fontSize
+                                            : settingsStore.textFontSize
+    readonly property string textFontFamily: Theme.readingFontFamilyFor(readingFont)
+    readonly property int preferredPageWidth: bookTypographyEnabled
+                                                   ? bookTypography.pageWidth
+                                                   : settingsStore.pageWidth
+    readonly property real lineHeight: bookTypographyEnabled
+                                           ? bookTypography.lineHeight
+                                           : settingsStore.lineHeight
+    readonly property int paragraphSpacing: bookTypographyEnabled
+                                                ? bookTypography.paragraphSpacing
+                                                : settingsStore.paragraphSpacing
+    readonly property int firstLineIndent: bookTypographyEnabled
+                                               ? bookTypography.firstLineIndent
+                                               : settingsStore.firstLineIndent
+    readonly property string textAlignment: bookTypographyEnabled
+                                                ? bookTypography.textAlignment
+                                                : settingsStore.textAlignment
     readonly property url activeDocumentUrl: readerController.sourceUrl
     readonly property bool hasDocument: readerController.hasDocument
     readonly property bool showingText: readerController.textMode
@@ -99,6 +114,8 @@ Item {
     property string searchQuery: ""
     property bool sidebarOpen: false
     property string textReadingMode: "scroll"
+    property bool bookTypographyEnabled: false
+    property var bookTypography: ({})
     property var navigationHistory: []
     property int navigationHistoryIndex: -1
 
@@ -116,6 +133,97 @@ Item {
                                              ? root.readerController.text
                                              : ""
         root.updateAnnotationHighlights()
+    }
+
+    function globalTypography() {
+        return {
+            "readingFont": root.settingsStore.readingFont,
+            "fontSize": root.settingsStore.textFontSize,
+            "lineHeight": root.settingsStore.lineHeight,
+            "paragraphSpacing": root.settingsStore.paragraphSpacing,
+            "firstLineIndent": root.settingsStore.firstLineIndent,
+            "textAlignment": root.settingsStore.textAlignment,
+            "pageWidth": root.settingsStore.pageWidth
+        }
+    }
+
+    function currentTypography() {
+        return {
+            "readingFont": root.readingFont,
+            "fontSize": root.textFontSize,
+            "lineHeight": root.lineHeight,
+            "paragraphSpacing": root.paragraphSpacing,
+            "firstLineIndent": root.firstLineIndent,
+            "textAlignment": root.textAlignment,
+            "pageWidth": root.preferredPageWidth
+        }
+    }
+
+    function loadBookTypography() {
+        if (!root.showingText || root.activeDocumentUrl.toString().length === 0) {
+            root.bookTypographyEnabled = false
+            root.bookTypography = ({})
+            return
+        }
+        const stored = root.settingsStore.bookTypography(root.activeDocumentUrl)
+        root.bookTypography = stored
+        root.bookTypographyEnabled = stored.enabled === true
+    }
+
+    function setBookTypographyEnabled(enabled) {
+        if (!root.showingText || root.activeDocumentUrl.toString().length === 0
+                || root.bookTypographyEnabled === enabled) {
+            return
+        }
+
+        if (enabled) {
+            const typography = root.globalTypography()
+            if (root.settingsStore.setBookTypography(root.activeDocumentUrl, typography)) {
+                root.loadBookTypography()
+            }
+        } else if (root.settingsStore.clearBookTypography(root.activeDocumentUrl)) {
+            root.bookTypographyEnabled = false
+            root.bookTypography = ({})
+        }
+    }
+
+    function setGlobalTypographyValue(name, value) {
+        switch (name) {
+        case "readingFont":
+            root.settingsStore.readingFont = value
+            break
+        case "fontSize":
+            root.settingsStore.textFontSize = value
+            break
+        case "lineHeight":
+            root.settingsStore.lineHeight = value
+            break
+        case "paragraphSpacing":
+            root.settingsStore.paragraphSpacing = value
+            break
+        case "firstLineIndent":
+            root.settingsStore.firstLineIndent = value
+            break
+        case "textAlignment":
+            root.settingsStore.textAlignment = value
+            break
+        case "pageWidth":
+            root.settingsStore.pageWidth = value
+            break
+        }
+    }
+
+    function setTypographyValue(name, value) {
+        if (!root.bookTypographyEnabled) {
+            root.setGlobalTypographyValue(name, value)
+            return
+        }
+
+        const typography = root.currentTypography()
+        typography[name] = value
+        if (root.settingsStore.setBookTypography(root.activeDocumentUrl, typography)) {
+            root.loadBookTypography()
+        }
     }
 
     function resetNavigationHistory() {
@@ -340,7 +448,7 @@ Item {
         if (root.showingPdf) {
             pdfView.zoomOut()
         } else if (root.showingText) {
-            root.settingsStore.textFontSize = Math.max(12, root.textFontSize - 1)
+            root.setTypographyValue("fontSize", Math.max(12, root.textFontSize - 1))
         }
     }
 
@@ -348,7 +456,7 @@ Item {
         if (root.showingPdf) {
             pdfView.zoomIn()
         } else if (root.showingText) {
-            root.settingsStore.textFontSize = Math.min(36, root.textFontSize + 1)
+            root.setTypographyValue("fontSize", Math.min(36, root.textFontSize + 1))
         }
     }
 
@@ -508,6 +616,7 @@ Item {
             pdfView.restoreState(root.settingsStore.pdfPage(root.activeDocumentUrl),
                                  root.settingsStore.pdfScale(root.activeDocumentUrl))
         } else if (root.showingText) {
+            root.loadBookTypography()
             root.textReadingMode = root.settingsStore.textReadingMode(
                 root.activeDocumentUrl)
             textView.restorePosition(
@@ -529,6 +638,8 @@ Item {
             root.flushReadingState()
             root.searchQuery = ""
             root.sidebarOpen = false
+            root.bookTypographyEnabled = false
+            root.bookTypography = ({})
             root.resetNavigationHistory()
         }
 
@@ -545,6 +656,16 @@ Item {
 
         function onAnnotationsChanged() {
             root.updateAnnotationHighlights()
+        }
+    }
+
+    Connections {
+        target: root.settingsStore
+
+        function onBookTypographyChanged(documentUrl) {
+            if (documentUrl.toString() === root.activeDocumentUrl.toString()) {
+                root.loadBookTypography()
+            }
         }
     }
 

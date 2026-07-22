@@ -318,7 +318,8 @@ Item {
                                                 root.linkColor,
                                                 root.pageColor)
         root.documentFormatter.fitImages(readerText.textDocument,
-                                          Math.max(1, readerText.width))
+                                          Math.max(1, readerText.width),
+                                          root.pagedMode ? root.pageTextHeight * 0.82 : 0)
         root.restorePosition(progress, textPosition)
     }
 
@@ -355,6 +356,7 @@ Item {
     }
     onDisplayTextChanged: Qt.callLater(root.applyTextFormatting)
     onRichTextChanged: Qt.callLater(root.applyTextFormatting)
+    onReadingModeChanged: Qt.callLater(root.applyTextFormatting)
     onLineHeightChanged: Qt.callLater(root.applyTextFormatting)
     onParagraphSpacingChanged: Qt.callLater(root.applyTextFormatting)
     onFirstLineIndentChanged: Qt.callLater(root.applyTextFormatting)

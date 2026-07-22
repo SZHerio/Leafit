@@ -199,6 +199,59 @@ bool richTextHasItalicText(const QString &html, const QString &text)
     return false;
 }
 
+bool richTextHasFixedPitchText(const QString &html, const QString &text)
+{
+    QTextDocument document;
+    document.setHtml(html);
+    for (QTextBlock block = document.begin(); block.isValid(); block = block.next()) {
+        for (QTextBlock::Iterator iterator = block.begin();
+             !iterator.atEnd();
+             ++iterator) {
+            const QTextFragment fragment = iterator.fragment();
+            if (!fragment.isValid()) {
+                continue;
+            }
+            const QFont font = fragment.charFormat().font();
+            bool monospaced = fragment.charFormat().fontFixedPitch()
+                              || font.styleHint() == QFont::Monospace;
+            for (const QString &family : font.families()) {
+                monospaced = monospaced
+                             || family.contains(QStringLiteral("mono"),
+                                                Qt::CaseInsensitive)
+                             || family.contains(QStringLiteral("courier"),
+                                                Qt::CaseInsensitive)
+                             || family.contains(QStringLiteral("consolas"),
+                                                Qt::CaseInsensitive);
+            }
+            if (fragment.text().contains(text)
+                && monospaced) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
+bool richTextHasSuperscriptLink(const QString &html, const QString &href)
+{
+    QTextDocument document;
+    document.setHtml(html);
+    for (QTextBlock block = document.begin(); block.isValid(); block = block.next()) {
+        for (QTextBlock::Iterator iterator = block.begin();
+             !iterator.atEnd();
+             ++iterator) {
+            const QTextFragment fragment = iterator.fragment();
+            if (fragment.isValid()
+                && fragment.charFormat().anchorHref() == href
+                && fragment.charFormat().verticalAlignment()
+                       == QTextCharFormat::AlignSuperScript) {
+                return true;
+            }
+        }
+    }
+    return false;
+}
+
 bool richTextHasDocumentStructures(const QString &html)
 {
     QTextDocument document;
@@ -397,13 +450,20 @@ void DocumentReadersTest::rendersHtmlAndMarkdownResources()
     QTemporaryDir directory;
     QVERIFY(directory.isValid());
     QVERIFY(writeFile(directory.filePath(QStringLiteral("pixel.png")), tinyPng()));
+    QVERIFY(writeFile(directory.filePath(QStringLiteral("book.css")),
+                      ".accent { font-style: italic; }"));
 
     const QString htmlPath = directory.filePath(QStringLiteral("sample.html"));
     QVERIFY(writeFile(
         htmlPath,
-        R"HTML(<html><head><title>Local HTML</title></head><body>
-<h1>HTML chapter</h1><p><a href="https://qt.io">Qt website</a></p>
-<img src="pixel.png" alt="Pixel"></body></html>)HTML"));
+        R"HTML(<html><head><title>Local HTML</title>
+<link rel="stylesheet" href="book.css"/></head><body>
+<h1 id="top">HTML chapter</h1><p class="accent">Styled locally.</p>
+<p><a href="https://qt.io">Qt website</a> <a href="sample.html#top">Top</a></p>
+<ul><li>List item</li></ul><table><tr><th>Name</th><th>Value</th></tr>
+<tr><td>Reader</td><td>SZHBooks</td></tr></table>
+<pre><code>const page = 24;</code></pre>
+<img src="pixel.png" alt="Pixel"/></body></html>)HTML"));
     const DocumentLoadResult htmlResult = HtmlDocumentReader().load(QFileInfo(htmlPath));
     QVERIFY(htmlResult.isSuccess());
     QVERIFY(htmlResult.richText);
@@ -411,6 +471,12 @@ void DocumentReadersTest::rendersHtmlAndMarkdownResources()
     QVERIFY(richTextHasImage(htmlResult.displayText));
     QVERIFY(richTextImagesAreIsolated(htmlResult.displayText));
     QVERIFY(richTextHasLink(htmlResult.displayText, QStringLiteral("https://qt.io")));
+    QVERIFY(richTextHasLink(htmlResult.displayText, QStringLiteral("#top")));
+    QVERIFY(richTextHasItalicText(htmlResult.displayText,
+                                  QStringLiteral("Styled locally.")));
+    QVERIFY(richTextHasDocumentStructures(htmlResult.displayText));
+    QVERIFY(richTextHasFixedPitchText(htmlResult.displayText,
+                                      QStringLiteral("const page = 24;")));
 
     const QString markdownPath = directory.filePath(QStringLiteral("sample.md"));
     QVERIFY(writeFile(
@@ -480,14 +546,20 @@ void DocumentReadersTest::rendersEpubStylesImagesAndFootnotes()
   <spine><itemref idref="chapter"/><itemref idref="notes" linear="no"/></spine>
 </package>)OPF"},
             {"OEBPS/chapter.xhtml",
-             R"HTML(<html xmlns="http://www.w3.org/1999/xhtml"><head>
+             R"HTML(<html xmlns="http://www.w3.org/1999/xhtml"
+ xmlns:epub="http://www.idpf.org/2007/ops"><head>
 <title>Chapter</title><link rel="stylesheet" href="styles/book.css"/></head><body>
 <h1 id="start">Chapter</h1><p class="accent">Styled paragraph.</p>
-<p><a href="notes.xhtml#note-1">Open footnote</a></p>
-<img src="images/pixel.png" alt="Pixel"/></body></html>)HTML"},
+<p>Text with note<a epub:type="noteref" href="notes.xhtml#note-1">1</a>.</p>
+<ul><li>First item</li></ul><table><tr><th>Key</th><th>Value</th></tr>
+<tr><td>Mode</td><td>Pages</td></tr></table>
+<pre><code>chapter.open();</code></pre>
+<figure><img src="images/pixel.png" alt="Pixel"/>
+<figcaption>Pixel caption.</figcaption></figure></body></html>)HTML"},
             {"OEBPS/notes.xhtml",
-             R"HTML(<html xmlns="http://www.w3.org/1999/xhtml"><body>
-<h1>Notes</h1><p id="note-1">Footnote text.</p>
+             R"HTML(<html xmlns="http://www.w3.org/1999/xhtml"
+ xmlns:epub="http://www.idpf.org/2007/ops"><body>
+<h1>Notes</h1><aside epub:type="footnote" id="note-1"><p>Footnote text.</p></aside>
 <a href="chapter.xhtml#start">Back</a></body></html>)HTML"},
             {"OEBPS/styles/book.css", ".accent { font-style: italic; }"},
             {"OEBPS/images/pixel.png", tinyPng()}
@@ -501,11 +573,18 @@ void DocumentReadersTest::rendersEpubStylesImagesAndFootnotes()
     QVERIFY(richTextImagesAreIsolated(result.displayText));
     QVERIFY(richTextHasItalicText(result.displayText,
                                   QStringLiteral("Styled paragraph.")));
+    QVERIFY(richTextHasItalicText(result.displayText,
+                                  QStringLiteral("Pixel caption.")));
     QVERIFY(richTextHasLink(result.displayText,
                             QStringLiteral("#epub-1-note-1")));
+    QVERIFY(richTextHasSuperscriptLink(result.displayText,
+                                       QStringLiteral("#epub-1-note-1")));
     QVERIFY(richTextHasAnchor(result.displayText,
                               QStringLiteral("epub-1-note-1")));
     QVERIFY(result.text.contains(QStringLiteral("Footnote text.")));
+    QVERIFY(richTextHasDocumentStructures(result.displayText));
+    QVERIFY(richTextHasFixedPitchText(result.displayText,
+                                      QStringLiteral("chapter.open();")));
 }
 
 void DocumentReadersTest::rendersDocxStructuresAndImages()

@@ -22,5 +22,6 @@ public:
     Q_INVOKABLE int anchorPosition(QObject *quickTextDocument,
                                    const QString &anchor) const;
     Q_INVOKABLE void fitImages(QObject *quickTextDocument,
-                               qreal maximumWidth) const;
+                               qreal maximumWidth,
+                               qreal maximumHeight) const;
 };

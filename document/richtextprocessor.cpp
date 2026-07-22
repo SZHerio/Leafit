@@ -2,6 +2,9 @@
 
 #include <QFile>
 #include <QMimeDatabase>
+#include <QDomDocument>
+#include <QStringConverter>
+#include <QStringDecoder>
 #include <QTextBlock>
 #include <QTextCharFormat>
 #include <QTextCursor>
@@ -15,6 +18,108 @@
 namespace {
 
 constexpr qsizetype maximumEmbeddedImageSize = 16 * 1024 * 1024;
+constexpr qsizetype maximumStyleSheetSize = 2 * 1024 * 1024;
+
+QString semanticStyleSheet()
+{
+    return QStringLiteral(
+        "body{margin:0;}"
+        "p{margin-top:0;margin-bottom:0.75em;}"
+        "h1,h2,h3,h4,h5,h6{page-break-after:avoid;}"
+        "blockquote{margin-left:1.5em;margin-right:0.5em;}"
+        "pre{font-family:monospace;white-space:pre-wrap;margin-top:0.75em;"
+        "margin-bottom:0.75em;padding:8px;}"
+        "code{font-family:monospace;}"
+        "table{border-collapse:collapse;margin-top:0.75em;margin-bottom:0.75em;}"
+        "th,td{border:1px solid #808080;padding:6px;}"
+        "th{font-weight:600;}"
+        "a{text-decoration:underline;}"
+        "sup{vertical-align:super;font-size:75%;}");
+}
+
+QString elementName(const QDomElement &element)
+{
+    return element.localName().isEmpty()
+               ? element.tagName().section(u':', -1)
+               : element.localName();
+}
+
+void collectElements(const QDomNode &node,
+                     const QString &name,
+                     QVector<QDomElement> *elements)
+{
+    for (QDomNode child = node.firstChild(); !child.isNull(); child = child.nextSibling()) {
+        if (!child.isElement()) {
+            continue;
+        }
+        const QDomElement element = child.toElement();
+        if (elementName(element).compare(name, Qt::CaseInsensitive) == 0) {
+            elements->append(element);
+        }
+        collectElements(element, name, elements);
+    }
+}
+
+QString decodedText(const QByteArray &bytes)
+{
+    QStringDecoder decoder(QStringConverter::Utf8);
+    const QString text = decoder.decode(bytes);
+    return decoder.hasError() ? QString::fromLocal8Bit(bytes) : text;
+}
+
+QString localStyleSheet(const QString &href, const QUrl &baseUrl)
+{
+    QUrl styleUrl(href.trimmed());
+    if (styleUrl.isRelative()) {
+        styleUrl = baseUrl.resolved(styleUrl);
+    }
+    if (!styleUrl.isLocalFile()) {
+        return {};
+    }
+
+    QFile file(styleUrl.toLocalFile());
+    if (!file.open(QIODevice::ReadOnly)
+        || file.size() <= 0
+        || file.size() > maximumStyleSheetSize) {
+        return {};
+    }
+    return decodedText(file.readAll());
+}
+
+QString withLocalStyleSheets(const QString &html, const QUrl &baseUrl)
+{
+    if (!baseUrl.isLocalFile()) {
+        return html;
+    }
+
+    QDomDocument dom;
+    if (!dom.setContent(html)) {
+        return html;
+    }
+
+    QVector<QDomElement> links;
+    collectElements(dom.documentElement(), QStringLiteral("link"), &links);
+    for (const QDomElement &link : links) {
+        const QStringList relations = link.attribute(QStringLiteral("rel"))
+                                          .toLower()
+                                          .simplified()
+                                          .split(u' ', Qt::SkipEmptyParts);
+        if (!relations.contains(QStringLiteral("stylesheet"))) {
+            continue;
+        }
+        const QString styleSheet = localStyleSheet(
+            link.attribute(QStringLiteral("href")), baseUrl);
+        QDomNode parent = link.parentNode();
+        if (styleSheet.trimmed().isEmpty()) {
+            parent.removeChild(link);
+            continue;
+        }
+        QDomElement style = dom.createElement(QStringLiteral("style"));
+        style.appendChild(dom.createTextNode(styleSheet));
+        parent.replaceChild(style, link);
+    }
+    return dom.toString(-1);
+}
 
 struct FormattedRange final
 {
@@ -133,7 +238,8 @@ std::unique_ptr<QTextDocument> RichTextProcessor::fromHtml(
 {
     auto document = std::make_unique<QTextDocument>();
     document->setBaseUrl(options.baseUrl);
-    document->setHtml(html);
+    document->setDefaultStyleSheet(semanticStyleSheet());
+    document->setHtml(withLocalStyleSheets(html, options.baseUrl));
     processDocument(document.get(), options);
     return document;
 }
@@ -144,6 +250,7 @@ std::unique_ptr<QTextDocument> RichTextProcessor::fromMarkdown(
 {
     auto document = std::make_unique<QTextDocument>();
     document->setBaseUrl(options.baseUrl);
+    document->setDefaultStyleSheet(semanticStyleSheet());
     document->setMarkdown(markdown);
     processDocument(document.get(), options);
     return document;

@@ -8,6 +8,7 @@
 #include <QObject>
 #include <QSettings>
 #include <QUrl>
+#include <QVariantMap>
 #include <QVector>
 
 class LocalStateStore final : public QObject, public ProfileStorage
@@ -69,6 +70,7 @@ public:
     Q_INVOKABLE qreal textPosition(const QUrl &documentUrl) const;
     Q_INVOKABLE int textCharacterPosition(const QUrl &documentUrl) const;
     Q_INVOKABLE QString textReadingMode(const QUrl &documentUrl) const;
+    Q_INVOKABLE QVariantMap bookTypography(const QUrl &documentUrl) const;
     Q_INVOKABLE int pdfPage(const QUrl &documentUrl) const;
     Q_INVOKABLE qreal pdfScale(const QUrl &documentUrl) const;
     Q_INVOKABLE void saveTextPosition(const QUrl &documentUrl, qreal progress);
@@ -77,6 +79,9 @@ public:
                                    int characterPosition);
     Q_INVOKABLE void setTextReadingMode(const QUrl &documentUrl,
                                         const QString &readingMode);
+    Q_INVOKABLE bool setBookTypography(const QUrl &documentUrl,
+                                       const QVariantMap &typography);
+    Q_INVOKABLE bool clearBookTypography(const QUrl &documentUrl);
     Q_INVOKABLE void savePdfPosition(const QUrl &documentUrl,
                                      int page,
                                      qreal scale,
@@ -126,6 +131,7 @@ signals:
     void lastBookUrlChanged();
     void libraryChanged();
     void documentProgressChanged(const QUrl &documentUrl, qreal progress);
+    void bookTypographyChanged(const QUrl &documentUrl);
     void profileChanged();
     void profileReplaced();
 

@@ -1483,6 +1483,11 @@
       <translation>Режим чтения</translation>
     </message>
     <message>
+      <location filename="../shell/ReadingSettingsPopup.qml" line="115" />
+      <source>For this book</source>
+      <translation>Для этой книги</translation>
+    </message>
+    <message>
       <location filename="../shell/ReadingSettingsPopup.qml" line="80" />
       <source>Reading settings</source>
       <translation>Настройки чтения</translation>

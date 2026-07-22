@@ -478,6 +478,25 @@ DocumentLoadResult HtmlDocumentReader::load(const QFileInfo &fileInfo) const
 
     RichTextProcessor::Options options;
     options.baseUrl = QUrl::fromLocalFile(fileInfo.absolutePath() + u'/');
+    const QUrl documentUrl = QUrl::fromLocalFile(fileInfo.absoluteFilePath());
+    options.linkResolver = [documentUrl, baseUrl = options.baseUrl](const QString &href) {
+        const QString trimmedHref = href.trimmed();
+        if (trimmedHref.isEmpty() || trimmedHref.startsWith(u'#')) {
+            return trimmedHref;
+        }
+
+        QUrl resolved(trimmedHref);
+        if (resolved.isRelative()) {
+            resolved = baseUrl.resolved(resolved);
+        }
+        if (resolved.isLocalFile()
+            && QFileInfo(resolved.toLocalFile()).absoluteFilePath()
+                   == QFileInfo(documentUrl.toLocalFile()).absoluteFilePath()) {
+            const QString fragment = resolved.fragment(QUrl::FullyDecoded);
+            return fragment.isEmpty() ? QStringLiteral("#") : u'#' + fragment;
+        }
+        return resolved.toString(QUrl::FullyEncoded);
+    };
     const std::unique_ptr<QTextDocument> document = RichTextProcessor::fromHtml(
         decodeText(bytes.bytes), options);
     const RichTextContent content = RichTextProcessor::content(*document);

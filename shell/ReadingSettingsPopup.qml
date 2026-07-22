@@ -109,6 +109,14 @@ Popup {
                 }
             }
 
+            SZHSwitch {
+                visible: root.textSettingsAvailable
+                Layout.fillWidth: true
+                text: qsTr("For this book")
+                checked: root.readerWorkspace.bookTypographyEnabled
+                onToggled: root.readerWorkspace.setBookTypographyEnabled(checked)
+            }
+
             ColumnLayout {
                 visible: root.textSettingsAvailable
                 Layout.fillWidth: true
@@ -124,8 +132,9 @@ Popup {
                 SZHSegmentedControl {
                     Layout.fillWidth: true
                     model: root.fontOptions
-                    value: root.settingsStore.readingFont
-                    onValueSelected: value => root.settingsStore.readingFont = value
+                    value: root.readerWorkspace.readingFont
+                    onValueSelected: value => root.readerWorkspace.setTypographyValue(
+                                         "readingFont", value)
                 }
             }
 
@@ -145,13 +154,14 @@ Popup {
                 SZHIconButton {
                     symbol: "-"
                     toolTip: qsTr("Decrease font size")
-                    enabled: root.settingsStore.textFontSize > 12
-                    onClicked: root.settingsStore.textFontSize -= 1
+                    enabled: root.readerWorkspace.textFontSize > 12
+                    onClicked: root.readerWorkspace.setTypographyValue(
+                                   "fontSize", root.readerWorkspace.textFontSize - 1)
                 }
 
                 Label {
                     Layout.preferredWidth: 34
-                    text: root.settingsStore.textFontSize
+                    text: root.readerWorkspace.textFontSize
                     color: Theme.textColor
                     font.family: Theme.uiFontFamily
                     font.pixelSize: Theme.bodyFontSize
@@ -162,8 +172,9 @@ Popup {
                 SZHIconButton {
                     symbol: "+"
                     toolTip: qsTr("Increase font size")
-                    enabled: root.settingsStore.textFontSize < 36
-                    onClicked: root.settingsStore.textFontSize += 1
+                    enabled: root.readerWorkspace.textFontSize < 36
+                    onClicked: root.readerWorkspace.setTypographyValue(
+                                   "fontSize", root.readerWorkspace.textFontSize + 1)
                 }
             }
 
@@ -182,8 +193,9 @@ Popup {
                 SZHSegmentedControl {
                     Layout.fillWidth: true
                     model: root.alignmentOptions
-                    value: root.settingsStore.textAlignment
-                    onValueSelected: value => root.settingsStore.textAlignment = value
+                    value: root.readerWorkspace.textAlignment
+                    onValueSelected: value => root.readerWorkspace.setTypographyValue(
+                                         "textAlignment", value)
                 }
             }
 
@@ -204,7 +216,7 @@ Popup {
                     }
 
                     Label {
-                        text: root.settingsStore.paragraphSpacing + qsTr(" px")
+                        text: root.readerWorkspace.paragraphSpacing + qsTr(" px")
                         color: Theme.textColor
                         font.family: Theme.uiFontFamily
                         font.pixelSize: Theme.captionFontSize
@@ -218,8 +230,9 @@ Popup {
                     from: 0
                     to: 32
                     stepSize: 2
-                    value: root.settingsStore.paragraphSpacing
-                    onMoved: root.settingsStore.paragraphSpacing = Math.round(value / 2) * 2
+                    value: root.readerWorkspace.paragraphSpacing
+                    onMoved: root.readerWorkspace.setTypographyValue(
+                                 "paragraphSpacing", Math.round(value / 2) * 2)
                 }
             }
 
@@ -240,7 +253,7 @@ Popup {
                     }
 
                     Label {
-                        text: root.settingsStore.firstLineIndent + qsTr(" px")
+                        text: root.readerWorkspace.firstLineIndent + qsTr(" px")
                         color: Theme.textColor
                         font.family: Theme.uiFontFamily
                         font.pixelSize: Theme.captionFontSize
@@ -254,8 +267,9 @@ Popup {
                     from: 0
                     to: 64
                     stepSize: 4
-                    value: root.settingsStore.firstLineIndent
-                    onMoved: root.settingsStore.firstLineIndent = Math.round(value / 4) * 4
+                    value: root.readerWorkspace.firstLineIndent
+                    onMoved: root.readerWorkspace.setTypographyValue(
+                                 "firstLineIndent", Math.round(value / 4) * 4)
                 }
             }
 
@@ -276,7 +290,7 @@ Popup {
                     }
 
                     Label {
-                        text: Number(root.settingsStore.lineHeight).toFixed(2)
+                        text: Number(root.readerWorkspace.lineHeight).toFixed(2)
                         color: Theme.textColor
                         font.family: Theme.uiFontFamily
                         font.pixelSize: Theme.captionFontSize
@@ -290,8 +304,9 @@ Popup {
                     from: 1.2
                     to: 2.0
                     stepSize: 0.05
-                    value: root.settingsStore.lineHeight
-                    onMoved: root.settingsStore.lineHeight = Math.round(value * 20) / 20
+                    value: root.readerWorkspace.lineHeight
+                    onMoved: root.readerWorkspace.setTypographyValue(
+                                 "lineHeight", Math.round(value * 20) / 20)
                 }
             }
 
@@ -312,7 +327,7 @@ Popup {
                     }
 
                     Label {
-                        text: root.settingsStore.pageWidth + qsTr(" px")
+                        text: root.readerWorkspace.preferredPageWidth + qsTr(" px")
                         color: Theme.textColor
                         font.family: Theme.uiFontFamily
                         font.pixelSize: Theme.captionFontSize
@@ -326,8 +341,9 @@ Popup {
                     from: 560
                     to: 1040
                     stepSize: 20
-                    value: root.settingsStore.pageWidth
-                    onMoved: root.settingsStore.pageWidth = Math.round(value / 20) * 20
+                    value: root.readerWorkspace.preferredPageWidth
+                    onMoved: root.readerWorkspace.setTypographyValue(
+                                 "pageWidth", Math.round(value / 20) * 20)
                 }
             }
 

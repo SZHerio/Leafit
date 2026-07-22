@@ -3,12 +3,15 @@
 #include "../library/librarybook.h"
 #include "../library/bookmetadatapatch.h"
 #include "../reader/readingannotation.h"
+#include "../reader/readingtypography.h"
 
 #include <QSqlDatabase>
 #include <QString>
 #include <QUrl>
 #include <QVariantMap>
 #include <QVector>
+
+#include <optional>
 
 class QSettings;
 
@@ -38,12 +41,16 @@ public:
     qreal textPosition(const QUrl &documentUrl) const;
     int textCharacterPosition(const QUrl &documentUrl) const;
     QString textReadingMode(const QUrl &documentUrl) const;
+    std::optional<ReadingTypography> bookTypography(const QUrl &documentUrl) const;
     int pdfPage(const QUrl &documentUrl) const;
     qreal pdfScale(const QUrl &documentUrl) const;
     bool saveTextPosition(const QUrl &documentUrl,
                           qreal progress,
                           int characterPosition = -1);
     bool setTextReadingMode(const QUrl &documentUrl, const QString &readingMode);
+    bool setBookTypography(const QUrl &documentUrl,
+                           const ReadingTypography &typography);
+    bool clearBookTypography(const QUrl &documentUrl);
     bool savePdfPosition(const QUrl &documentUrl,
                          int page,
                          qreal scale,

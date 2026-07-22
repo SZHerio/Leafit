@@ -343,7 +343,7 @@ TestCase {
 
         function applyTypography(document, lineHeight, paragraphSpacing,
                                  firstLineIndent, alignment, textColor, pageColor) {}
-        function fitImages(document, maximumWidth) {}
+        function fitImages(document, maximumWidth, maximumHeight) {}
         function anchorPosition(document, anchor) { return -1 }
     }
 

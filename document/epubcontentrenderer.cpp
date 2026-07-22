@@ -27,6 +27,7 @@ using DocumentXml::firstElementByName;
 using DocumentXml::normalizedBlock;
 
 constexpr qsizetype maximumEpubImageSize = 16 * 1024 * 1024;
+constexpr qsizetype maximumEpubStyleSheetSize = 2 * 1024 * 1024;
 
 QString decode(const QByteArray &bytes)
 {
@@ -69,6 +70,95 @@ bool containsToken(const QString &values, const QString &token)
     return values.simplified().split(u' ', Qt::SkipEmptyParts).contains(token);
 }
 
+void appendInlineStyle(QDomElement *element, const QString &style)
+{
+    if (!element || element->isNull()) {
+        return;
+    }
+    QString current = attributeByName(*element, QStringLiteral("style")).trimmed();
+    if (!current.isEmpty() && !current.endsWith(u';')) {
+        current += u';';
+    }
+    element->setAttribute(QStringLiteral("style"), current + style);
+}
+
+void copyAttributes(const QDomElement &source, QDomElement *destination)
+{
+    const QDomNamedNodeMap attributes = source.attributes();
+    for (int index = 0; index < attributes.size(); ++index) {
+        const QDomNode attribute = attributes.item(index);
+        destination->setAttribute(attribute.nodeName(), attribute.nodeValue());
+    }
+}
+
+void normalizeSemanticChildren(QDomDocument *document, QDomNode parent)
+{
+    static const QStringList blockElements = {
+        QStringLiteral("article"),
+        QStringLiteral("aside"),
+        QStringLiteral("figure"),
+        QStringLiteral("footer"),
+        QStringLiteral("header"),
+        QStringLiteral("main"),
+        QStringLiteral("nav"),
+        QStringLiteral("section")
+    };
+
+    for (QDomNode node = parent.firstChild(); !node.isNull();) {
+        const QDomNode nextNode = node.nextSibling();
+        if (!node.isElement()) {
+            node = nextNode;
+            continue;
+        }
+
+        QDomElement element = node.toElement();
+        const QString originalName = elementName(element).toLower();
+        const QString semanticTypes = (attributeByName(element, QStringLiteral("type"))
+                                       + u' '
+                                       + attributeByName(element, QStringLiteral("role")))
+                                          .toLower();
+        const bool footnote = containsToken(semanticTypes, QStringLiteral("footnote"))
+                              || containsToken(semanticTypes,
+                                               QStringLiteral("doc-footnote"))
+                              || containsToken(semanticTypes, QStringLiteral("endnote"));
+        const bool noteReference = originalName == QLatin1String("a")
+                                   && (containsToken(semanticTypes,
+                                                     QStringLiteral("noteref"))
+                                       || containsToken(semanticTypes,
+                                                        QStringLiteral("doc-noteref")));
+
+        if (blockElements.contains(originalName)
+            || originalName == QLatin1String("figcaption")) {
+            QDomElement replacement = document->createElement(
+                originalName == QLatin1String("figcaption")
+                    ? QStringLiteral("p")
+                    : QStringLiteral("div"));
+            copyAttributes(element, &replacement);
+            while (element.hasChildNodes()) {
+                replacement.appendChild(element.firstChild());
+            }
+            parent.replaceChild(replacement, element);
+            element = replacement;
+        }
+
+        if (footnote) {
+            appendInlineStyle(&element,
+                              QStringLiteral("font-size:90%;margin-top:12px;"
+                                             "margin-bottom:12px;"));
+        }
+        if (noteReference) {
+            appendInlineStyle(&element,
+                              QStringLiteral("vertical-align:super;font-size:75%;"));
+        }
+        if (originalName == QLatin1String("figcaption")) {
+            appendInlineStyle(&element, QStringLiteral("font-style:italic;"));
+        }
+
+        normalizeSemanticChildren(document, element);
+        node = nextNode;
+    }
+}
+
 QString htmlWithEmbeddedStyleSheets(const ZipArchiveReader &zip,
                                     const QString &chapterPath,
                                     const QByteArray &markup)
@@ -78,7 +168,8 @@ QString htmlWithEmbeddedStyleSheets(const ZipArchiveReader &zip,
         return decode(markup);
     }
 
-    QString styleSheet;
+    normalizeSemanticChildren(&document, document.documentElement());
+
     for (const QDomElement &link : elementsByName(document, QStringLiteral("link"))) {
         if (!containsToken(attributeByName(link, QStringLiteral("rel")).toLower(),
                            QStringLiteral("stylesheet"))) {
@@ -93,21 +184,14 @@ QString htmlWithEmbeddedStyleSheets(const ZipArchiveReader &zip,
             ZipPathUtils::directory(chapterPath),
             QUrl::fromPercentEncoding(href.toUtf8()));
         const QByteArray styleBytes = ZipPathUtils::fileData(zip, stylePath);
-        if (!styleBytes.isEmpty()) {
-            styleSheet += decode(styleBytes) + u'\n';
-        }
-    }
-
-    if (!styleSheet.isEmpty()) {
-        QDomElement head = firstElementByName(document, QStringLiteral("head"));
-        if (head.isNull()) {
-            head = document.createElement(QStringLiteral("head"));
-            document.documentElement().insertBefore(head,
-                                                     document.documentElement().firstChild());
+        QDomNode parent = link.parentNode();
+        if (styleBytes.isEmpty() || styleBytes.size() > maximumEpubStyleSheetSize) {
+            parent.removeChild(link);
+            continue;
         }
         QDomElement style = document.createElement(QStringLiteral("style"));
-        style.appendChild(document.createTextNode(styleSheet));
-        head.appendChild(style);
+        style.appendChild(document.createTextNode(decode(styleBytes)));
+        parent.replaceChild(style, link);
     }
     return document.toString(-1);
 }

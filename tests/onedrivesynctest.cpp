@@ -59,6 +59,16 @@ void OneDriveSyncTest::mapsManagedBookPathsBetweenDevices()
                                 QStringLiteral("TXT"));
     firstStore.setBookCollection(firstBook, QStringLiteral("Fiction"));
     firstStore.saveTextPosition(firstBook, 0.42);
+    QVERIFY(firstStore.setBookTypography(firstBook,
+                                         {{QStringLiteral("readingFont"),
+                                           QStringLiteral("sans")},
+                                          {QStringLiteral("fontSize"), 22},
+                                          {QStringLiteral("lineHeight"), 1.65},
+                                          {QStringLiteral("paragraphSpacing"), 14},
+                                          {QStringLiteral("firstLineIndent"), 28},
+                                          {QStringLiteral("textAlignment"),
+                                           QStringLiteral("left")},
+                                          {QStringLiteral("pageWidth"), 780}}));
     firstStore.setLastBookUrl(firstBook);
     const QString relativeCoverPath = QStringLiteral(".szhbooks/covers/novel.png");
     QVERIFY(QDir().mkpath(QFileInfo(firstRoot + u'/' + relativeCoverPath).absolutePath()));
@@ -99,6 +109,10 @@ void OneDriveSyncTest::mapsManagedBookPathsBetweenDevices()
     QCOMPARE(books.constFirst().customCoverUrl,
              QUrl::fromLocalFile(secondRoot + u'/' + relativeCoverPath));
     QCOMPARE(secondStore.lastBookUrl(), secondBook);
+    const QVariantMap secondTypography = secondStore.bookTypography(secondBook);
+    QVERIFY(secondTypography.value(QStringLiteral("enabled")).toBool());
+    QCOMPARE(secondTypography.value(QStringLiteral("fontSize")).toInt(), 22);
+    QCOMPARE(secondTypography.value(QStringLiteral("pageWidth")).toInt(), 780);
 
     ReadingAnnotationStore secondAnnotations(secondStore.settingsFilePath());
     secondAnnotations.setDocumentUrl(secondBook);

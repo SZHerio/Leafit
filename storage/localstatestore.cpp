@@ -1,5 +1,7 @@
 #include "localstatestore.h"
 
+#include "../reader/readingtypography.h"
+
 #include <QCoreApplication>
 #include <QDebug>
 #include <QDir>
@@ -10,16 +12,16 @@
 
 namespace {
 
-constexpr int minimumFontSize = 12;
-constexpr int maximumFontSize = 36;
-constexpr qreal minimumLineHeight = 1.2;
-constexpr qreal maximumLineHeight = 2.0;
-constexpr int minimumParagraphSpacing = 0;
-constexpr int maximumParagraphSpacing = 32;
-constexpr int minimumFirstLineIndent = 0;
-constexpr int maximumFirstLineIndent = 64;
-constexpr int minimumPageWidth = 560;
-constexpr int maximumPageWidth = 1040;
+constexpr int minimumFontSize = ReadingTypography::minimumFontSize;
+constexpr int maximumFontSize = ReadingTypography::maximumFontSize;
+constexpr qreal minimumLineHeight = ReadingTypography::minimumLineHeight;
+constexpr qreal maximumLineHeight = ReadingTypography::maximumLineHeight;
+constexpr int minimumParagraphSpacing = ReadingTypography::minimumParagraphSpacing;
+constexpr int maximumParagraphSpacing = ReadingTypography::maximumParagraphSpacing;
+constexpr int minimumFirstLineIndent = ReadingTypography::minimumFirstLineIndent;
+constexpr int maximumFirstLineIndent = ReadingTypography::maximumFirstLineIndent;
+constexpr int minimumPageWidth = ReadingTypography::minimumPageWidth;
+constexpr int maximumPageWidth = ReadingTypography::maximumPageWidth;
 constexpr int minimumScrollSpeed = 50;
 constexpr int maximumScrollSpeed = 200;
 constexpr int scrollSpeedStep = 10;
@@ -58,12 +60,7 @@ QString normalizedLanguage(const QString &language)
 
 QString normalizedTextAlignment(const QString &textAlignment)
 {
-    const QString normalized = textAlignment.trimmed().toLower();
-    static const QStringList supportedAlignments = {
-        QStringLiteral("left"),
-        QStringLiteral("justify")
-    };
-    return supportedAlignments.contains(normalized) ? normalized : defaultTextAlignment;
+    return ReadingTypography::normalizedAlignment(textAlignment);
 }
 
 QString normalizedLibrarySortMode(const QString &sortMode)
@@ -144,13 +141,7 @@ QString migratedDefaultSettingsFilePath()
 
 QString normalizedReadingFont(const QString &readingFont)
 {
-    const QString normalized = readingFont.trimmed().toLower();
-    static const QStringList supportedFonts = {
-        QStringLiteral("serif"),
-        QStringLiteral("sans"),
-        QStringLiteral("mono")
-    };
-    return supportedFonts.contains(normalized) ? normalized : defaultReadingFont;
+    return ReadingTypography::normalizedFont(readingFont);
 }
 
 } // namespace
@@ -601,6 +592,14 @@ QString LocalStateStore::textReadingMode(const QUrl &documentUrl) const
     return m_profileDatabase.textReadingMode(documentUrl);
 }
 
+QVariantMap LocalStateStore::bookTypography(const QUrl &documentUrl) const
+{
+    const std::optional<ReadingTypography> typography =
+        m_profileDatabase.bookTypography(documentUrl);
+    return typography ? typography->toVariantMap(true)
+                      : ReadingTypography().toVariantMap(false);
+}
+
 int LocalStateStore::pdfPage(const QUrl &documentUrl) const
 {
     return m_profileDatabase.pdfPage(documentUrl);
@@ -642,6 +641,31 @@ void LocalStateStore::setTextReadingMode(const QUrl &documentUrl,
         return;
     }
     emit profileChanged();
+}
+
+bool LocalStateStore::setBookTypography(const QUrl &documentUrl,
+                                        const QVariantMap &typography)
+{
+    if (documentUrl.isEmpty()
+        || !m_profileDatabase.setBookTypography(
+            documentUrl,
+            ReadingTypography::fromVariantMap(typography))) {
+        return false;
+    }
+    emit bookTypographyChanged(documentUrl);
+    emit profileChanged();
+    return true;
+}
+
+bool LocalStateStore::clearBookTypography(const QUrl &documentUrl)
+{
+    if (documentUrl.isEmpty()
+        || !m_profileDatabase.clearBookTypography(documentUrl)) {
+        return false;
+    }
+    emit bookTypographyChanged(documentUrl);
+    emit profileChanged();
+    return true;
 }
 
 void LocalStateStore::savePdfPosition(const QUrl &documentUrl,

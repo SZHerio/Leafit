@@ -29,6 +29,7 @@ private slots:
     void migratesSqliteMetadataSchema();
     void resetsReadingPreferences();
     void keepsIndependentDocumentPositions();
+    void persistsBookTypography();
     void persistsLibraryPresentation();
     void maintainsLocalLibrary();
     void filtersAndRemovesLibraryBooks();
@@ -284,7 +285,7 @@ void LocalStateStoreTest::migratesSqliteMetadataSchema()
         QVERIFY(query.exec(QStringLiteral(
             "SELECT value FROM schema_meta WHERE key = 'version'")));
         QVERIFY(query.next());
-        QCOMPARE(query.value(0).toInt(), 3);
+        QCOMPARE(query.value(0).toInt(), 4);
         database.close();
     }
     QSqlDatabase::removeDatabase(verifyConnection);
@@ -349,6 +350,55 @@ void LocalStateStoreTest::keepsIndependentDocumentPositions()
     QCOMPARE(restored.pdfScale(textBook), 1.0);
     QCOMPARE(restored.textCharacterPosition(pdfBook), -1);
     QCOMPARE(restored.textReadingMode(pdfBook), QStringLiteral("scroll"));
+}
+
+void LocalStateStoreTest::persistsBookTypography()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString firstSettings = directory.filePath(QStringLiteral("first.ini"));
+    const QString secondSettings = directory.filePath(QStringLiteral("second.ini"));
+    const QUrl bookUrl = QUrl::fromLocalFile(
+        directory.filePath(QStringLiteral("typography.epub")));
+    const QVariantMap typography = {
+        {QStringLiteral("readingFont"), QStringLiteral("sans")},
+        {QStringLiteral("fontSize"), 23},
+        {QStringLiteral("lineHeight"), 1.7},
+        {QStringLiteral("paragraphSpacing"), 16},
+        {QStringLiteral("firstLineIndent"), 32},
+        {QStringLiteral("textAlignment"), QStringLiteral("left")},
+        {QStringLiteral("pageWidth"), 760}
+    };
+
+    QVariantMap portableProfile;
+    {
+        LocalStateStore store(firstSettings);
+        QVERIFY(store.setBookTypography(bookUrl, typography));
+        portableProfile = store.profileValues();
+        store.sync();
+    }
+
+    LocalStateStore restored(firstSettings);
+    const QVariantMap restoredTypography = restored.bookTypography(bookUrl);
+    QVERIFY(restoredTypography.value(QStringLiteral("enabled")).toBool());
+    QCOMPARE(restoredTypography.value(QStringLiteral("readingFont")).toString(),
+             QStringLiteral("sans"));
+    QCOMPARE(restoredTypography.value(QStringLiteral("fontSize")).toInt(), 23);
+    QCOMPARE(restoredTypography.value(QStringLiteral("lineHeight")).toReal(), 1.7);
+    QCOMPARE(restoredTypography.value(QStringLiteral("paragraphSpacing")).toInt(), 16);
+    QCOMPARE(restoredTypography.value(QStringLiteral("firstLineIndent")).toInt(), 32);
+    QCOMPARE(restoredTypography.value(QStringLiteral("textAlignment")).toString(),
+             QStringLiteral("left"));
+    QCOMPARE(restoredTypography.value(QStringLiteral("pageWidth")).toInt(), 760);
+
+    LocalStateStore imported(secondSettings);
+    QString errorMessage;
+    QVERIFY2(imported.replaceProfileValues(portableProfile, &errorMessage),
+             qPrintable(errorMessage));
+    QVERIFY(imported.bookTypography(bookUrl).value(QStringLiteral("enabled")).toBool());
+    QVERIFY(imported.clearBookTypography(bookUrl));
+    QVERIFY(!imported.bookTypography(bookUrl).value(QStringLiteral("enabled")).toBool());
 }
 
 void LocalStateStoreTest::persistsLibraryPresentation()
@@ -645,6 +695,9 @@ void LocalStateStoreTest::relinksDocumentStateAndAnnotations()
                            QStringLiteral("Local Author"),
                            QStringLiteral("TXT"));
     store.saveTextPosition(oldUrl, 0.42);
+    QVERIFY(store.setBookTypography(oldUrl,
+                                    {{QStringLiteral("fontSize"), 21},
+                                     {QStringLiteral("pageWidth"), 740}}));
     store.setLastBookUrl(oldUrl);
 
     ReadingAnnotationStore annotations(settingsPath);
@@ -662,6 +715,9 @@ void LocalStateStoreTest::relinksDocumentStateAndAnnotations()
     QVERIFY(store.relinkDocument(oldUrl, newUrl));
     QCOMPARE(store.lastBookUrl(), newUrl);
     QVERIFY(qAbs(store.textPosition(newUrl) - 0.42) < 0.0001);
+    QVERIFY(store.bookTypography(newUrl).value(QStringLiteral("enabled")).toBool());
+    QCOMPARE(store.bookTypography(newUrl).value(QStringLiteral("fontSize")).toInt(), 21);
+    QVERIFY(!store.bookTypography(oldUrl).value(QStringLiteral("enabled")).toBool());
     QCOMPARE(store.libraryBooks().size(), 1);
     QCOMPARE(store.libraryBooks().constFirst().sourceUrl, newUrl);
 

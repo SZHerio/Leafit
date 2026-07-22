@@ -16,7 +16,7 @@
 
 namespace {
 
-constexpr int schemaVersion = 3;
+constexpr int schemaVersion = 4;
 constexpr qreal minimumPdfScale = 0.4;
 constexpr qreal maximumPdfScale = 3.0;
 
@@ -307,6 +307,13 @@ bool ProfileDatabase::createSchema()
             "created_at TEXT NOT NULL DEFAULT '', PRIMARY KEY(book_id, id), "
             "FOREIGN KEY(book_id) REFERENCES books(id) ON UPDATE CASCADE ON DELETE CASCADE)"),
         QStringLiteral(
+            "CREATE TABLE IF NOT EXISTS book_typography("
+            "book_id TEXT PRIMARY KEY, reading_font TEXT NOT NULL, "
+            "font_size INTEGER NOT NULL, line_height REAL NOT NULL, "
+            "paragraph_spacing INTEGER NOT NULL, first_line_indent INTEGER NOT NULL, "
+            "text_alignment TEXT NOT NULL, page_width INTEGER NOT NULL, "
+            "FOREIGN KEY(book_id) REFERENCES books(id) ON UPDATE CASCADE ON DELETE CASCADE)"),
+        QStringLiteral(
             "CREATE INDEX IF NOT EXISTS books_library_order "
             "ON books(in_library, last_opened DESC, title)"),
         QStringLiteral(
@@ -462,6 +469,32 @@ QVariantMap ProfileDatabase::profileValues() const
         }
     }
 
+    QSqlQuery typographyQuery(m_database);
+    if (!typographyQuery.exec(QStringLiteral(
+            "SELECT book_id, reading_font, font_size, line_height, paragraph_spacing, "
+            "first_line_indent, text_alignment, page_width FROM book_typography"))) {
+        setLastError(typographyQuery.lastError().text());
+        return values;
+    }
+    while (typographyQuery.next()) {
+        const QString id = typographyQuery.value(0).toString();
+        values.insert(documentFieldKey(id, QStringLiteral("typography/enabled")), true);
+        values.insert(documentFieldKey(id, QStringLiteral("typography/readingFont")),
+                      typographyQuery.value(1));
+        values.insert(documentFieldKey(id, QStringLiteral("typography/fontSize")),
+                      typographyQuery.value(2));
+        values.insert(documentFieldKey(id, QStringLiteral("typography/lineHeight")),
+                      typographyQuery.value(3));
+        values.insert(documentFieldKey(id, QStringLiteral("typography/paragraphSpacing")),
+                      typographyQuery.value(4));
+        values.insert(documentFieldKey(id, QStringLiteral("typography/firstLineIndent")),
+                      typographyQuery.value(5));
+        values.insert(documentFieldKey(id, QStringLiteral("typography/textAlignment")),
+                      typographyQuery.value(6));
+        values.insert(documentFieldKey(id, QStringLiteral("typography/pageWidth")),
+                      typographyQuery.value(7));
+    }
+
     QSqlQuery annotationQuery(m_database);
     if (!annotationQuery.exec(QStringLiteral(
             "SELECT book_id, id, source_url, type, progress, page, start_position, "
@@ -535,6 +568,7 @@ bool ProfileDatabase::replaceProfileValues(const QVariantMap &values,
 bool ProfileDatabase::clearProfileData()
 {
     return execute(QStringLiteral("DELETE FROM annotations"))
+           && execute(QStringLiteral("DELETE FROM book_typography"))
            && execute(QStringLiteral("DELETE FROM books"))
            && execute(QStringLiteral("DELETE FROM profile_state"));
 }
@@ -596,6 +630,12 @@ bool ProfileDatabase::importProfileValues(const QVariantMap &values,
         ":genres, :tags, :language, :publication_year, :custom_cover_url, :metadata_edited, "
         ":reading_progress, :text_progress, :text_position, :text_reading_mode, "
         ":pdf_page, :pdf_scale, :last_opened)"));
+    QSqlQuery typographyQuery(m_database);
+    typographyQuery.prepare(QStringLiteral(
+        "INSERT INTO book_typography(book_id, reading_font, font_size, line_height, "
+        "paragraph_spacing, first_line_indent, text_alignment, page_width) "
+        "VALUES(:book_id, :reading_font, :font_size, :line_height, "
+        ":paragraph_spacing, :first_line_indent, :text_alignment, :page_width)"));
     for (auto book = books.cbegin(); book != books.cend(); ++book) {
         const QVariantMap data = book.value();
         const QString sourceUrl = data.value(QStringLiteral("sourceUrl")).toString();
@@ -651,6 +691,47 @@ bool ProfileDatabase::importProfileValues(const QVariantMap &values,
                 *errorMessage = m_errorMessage;
             }
             return false;
+        }
+
+        if (data.value(QStringLiteral("typography/enabled"), false).toBool()) {
+            const ReadingTypography defaults;
+            const ReadingTypography typography = ReadingTypography::fromVariantMap({
+                {QStringLiteral("readingFont"),
+                 data.value(QStringLiteral("typography/readingFont"),
+                            defaults.readingFont)},
+                {QStringLiteral("fontSize"),
+                 data.value(QStringLiteral("typography/fontSize"), defaults.fontSize)},
+                {QStringLiteral("lineHeight"),
+                 data.value(QStringLiteral("typography/lineHeight"), defaults.lineHeight)},
+                {QStringLiteral("paragraphSpacing"),
+                 data.value(QStringLiteral("typography/paragraphSpacing"),
+                            defaults.paragraphSpacing)},
+                {QStringLiteral("firstLineIndent"),
+                 data.value(QStringLiteral("typography/firstLineIndent"),
+                            defaults.firstLineIndent)},
+                {QStringLiteral("textAlignment"),
+                 data.value(QStringLiteral("typography/textAlignment"),
+                            defaults.textAlignment)},
+                {QStringLiteral("pageWidth"),
+                 data.value(QStringLiteral("typography/pageWidth"), defaults.pageWidth)}
+            });
+            const QList<QPair<QString, QVariant>> typographyBindings = {
+                {QStringLiteral(":book_id"), book.key()},
+                {QStringLiteral(":reading_font"), typography.readingFont},
+                {QStringLiteral(":font_size"), typography.fontSize},
+                {QStringLiteral(":line_height"), typography.lineHeight},
+                {QStringLiteral(":paragraph_spacing"), typography.paragraphSpacing},
+                {QStringLiteral(":first_line_indent"), typography.firstLineIndent},
+                {QStringLiteral(":text_alignment"), typography.textAlignment},
+                {QStringLiteral(":page_width"), typography.pageWidth}
+            };
+            if (!bindAndExecute(&typographyQuery, typographyBindings)) {
+                setLastError(typographyQuery.lastError().text());
+                if (errorMessage) {
+                    *errorMessage = m_errorMessage;
+                }
+                return false;
+            }
         }
     }
 
@@ -789,6 +870,30 @@ QString ProfileDatabase::textReadingMode(const QUrl &documentUrl) const
                : QStringLiteral("scroll");
 }
 
+std::optional<ReadingTypography> ProfileDatabase::bookTypography(
+    const QUrl &documentUrl) const
+{
+    QSqlQuery query(m_database);
+    query.prepare(QStringLiteral(
+        "SELECT reading_font, font_size, line_height, paragraph_spacing, "
+        "first_line_indent, text_alignment, page_width "
+        "FROM book_typography WHERE book_id = :book_id"));
+    query.bindValue(QStringLiteral(":book_id"), DocumentStorageKey::id(documentUrl));
+    if (!query.exec() || !query.next()) {
+        return std::nullopt;
+    }
+
+    return ReadingTypography::fromVariantMap({
+        {QStringLiteral("readingFont"), query.value(0)},
+        {QStringLiteral("fontSize"), query.value(1)},
+        {QStringLiteral("lineHeight"), query.value(2)},
+        {QStringLiteral("paragraphSpacing"), query.value(3)},
+        {QStringLiteral("firstLineIndent"), query.value(4)},
+        {QStringLiteral("textAlignment"), query.value(5)},
+        {QStringLiteral("pageWidth"), query.value(6)}
+    });
+}
+
 int ProfileDatabase::pdfPage(const QUrl &documentUrl) const
 {
     QSqlQuery query(m_database);
@@ -841,6 +946,54 @@ bool ProfileDatabase::setTextReadingMode(const QUrl &documentUrl,
         "UPDATE books SET text_reading_mode = :mode WHERE id = :id"));
     query.bindValue(QStringLiteral(":mode"), normalizedTextReadingMode(readingMode));
     query.bindValue(QStringLiteral(":id"), DocumentStorageKey::id(documentUrl));
+    if (!query.exec()) {
+        setLastError(query.lastError().text());
+        return false;
+    }
+    return true;
+}
+
+bool ProfileDatabase::setBookTypography(const QUrl &documentUrl,
+                                        const ReadingTypography &typography)
+{
+    if (!ensureBookRecord(documentUrl)) {
+        return false;
+    }
+
+    QSqlQuery query(m_database);
+    query.prepare(QStringLiteral(
+        "INSERT INTO book_typography(book_id, reading_font, font_size, line_height, "
+        "paragraph_spacing, first_line_indent, text_alignment, page_width) "
+        "VALUES(:book_id, :reading_font, :font_size, :line_height, "
+        ":paragraph_spacing, :first_line_indent, :text_alignment, :page_width) "
+        "ON CONFLICT(book_id) DO UPDATE SET reading_font = excluded.reading_font, "
+        "font_size = excluded.font_size, line_height = excluded.line_height, "
+        "paragraph_spacing = excluded.paragraph_spacing, "
+        "first_line_indent = excluded.first_line_indent, "
+        "text_alignment = excluded.text_alignment, page_width = excluded.page_width"));
+    const QList<QPair<QString, QVariant>> bindings = {
+        {QStringLiteral(":book_id"), DocumentStorageKey::id(documentUrl)},
+        {QStringLiteral(":reading_font"), typography.readingFont},
+        {QStringLiteral(":font_size"), typography.fontSize},
+        {QStringLiteral(":line_height"), typography.lineHeight},
+        {QStringLiteral(":paragraph_spacing"), typography.paragraphSpacing},
+        {QStringLiteral(":first_line_indent"), typography.firstLineIndent},
+        {QStringLiteral(":text_alignment"), typography.textAlignment},
+        {QStringLiteral(":page_width"), typography.pageWidth}
+    };
+    if (!bindAndExecute(&query, bindings)) {
+        setLastError(query.lastError().text());
+        return false;
+    }
+    return true;
+}
+
+bool ProfileDatabase::clearBookTypography(const QUrl &documentUrl)
+{
+    QSqlQuery query(m_database);
+    query.prepare(QStringLiteral(
+        "DELETE FROM book_typography WHERE book_id = :book_id"));
+    query.bindValue(QStringLiteral(":book_id"), DocumentStorageKey::id(documentUrl));
     if (!query.exec()) {
         setLastError(query.lastError().text());
         return false;
