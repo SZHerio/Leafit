@@ -73,6 +73,7 @@ Rectangle {
                 visible: root.book.fileAvailable || false
                 Layout.preferredWidth: Math.min(320, parent.width)
                 value: root.book.progress || 0
+                accessibleName: qsTr("Reading progress")
             }
         }
 

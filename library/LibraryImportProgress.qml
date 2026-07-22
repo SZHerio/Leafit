@@ -53,6 +53,7 @@ Rectangle {
             SZHProgressBar {
                 Layout.fillWidth: true
                 value: root.fileService.progress
+                accessibleName: qsTr("Book import progress")
             }
         }
 

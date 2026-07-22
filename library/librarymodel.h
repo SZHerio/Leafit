@@ -114,6 +114,7 @@ public:
     Q_INVOKABLE void removeBook(int row);
     Q_INVOKABLE bool relinkBook(const QUrl &oldSourceUrl, const QUrl &newSourceUrl);
     Q_INVOKABLE QVariantMap book(const QUrl &sourceUrl) const;
+    Q_INVOKABLE QVariantMap bookAt(int row) const;
     Q_INVOKABLE bool updateBooksMetadata(const QVariantList &sourceUrls,
                                          const QVariantMap &changes);
     Q_INVOKABLE bool setCustomCover(const QUrl &sourceUrl, const QUrl &imageUrl);

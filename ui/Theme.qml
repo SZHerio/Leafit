@@ -38,7 +38,7 @@ QtObject {
     readonly property color accentHoverColor: darkMode ? "#efefef" : "#2a2a2a"
     readonly property color accentPressedColor: darkMode ? "#d4d4d4" : "#000000"
     readonly property color accentSoftColor: darkMode ? "#262626" : "#e7e7e7"
-    readonly property color onAccentColor: darkMode ? "#080808" : "#ffffff"
+    readonly property color accentTextColor: darkMode ? "#080808" : "#ffffff"
     readonly property color primaryActionColor: darkMode ? "#ffffff" : "#111111"
     readonly property color primaryActionHoverColor: darkMode ? "#e5e5e5" : "#2a2a2a"
     readonly property color primaryActionPressedColor: darkMode ? "#c8c8c8" : "#000000"

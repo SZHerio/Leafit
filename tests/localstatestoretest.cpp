@@ -513,6 +513,9 @@ void LocalStateStoreTest::filtersAndRemovesLibraryBooks()
     model.setSortMode(QStringLiteral("title"));
     QCOMPARE(model.data(model.index(0, 0), LibraryModel::TitleRole).toString(),
              QStringLiteral("Quiet novel"));
+    QCOMPARE(model.bookAt(0).value(QStringLiteral("sourceUrl")).toUrl(), textBook);
+    QVERIFY(model.bookAt(-1).isEmpty());
+    QVERIFY(model.bookAt(model.rowCount()).isEmpty());
 
     model.setFormatFilter(QStringLiteral("PDF"));
     QCOMPARE(model.rowCount(), 1);

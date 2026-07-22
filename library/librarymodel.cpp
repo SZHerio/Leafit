@@ -551,6 +551,12 @@ QVariantMap LibraryModel::book(const QUrl &sourceUrl) const
     return match == m_allBooks.cend() ? QVariantMap() : toVariantMap(*match);
 }
 
+QVariantMap LibraryModel::bookAt(int row) const
+{
+    return row >= 0 && row < m_visibleBooks.size()
+               ? toVariantMap(m_visibleBooks.at(row)) : QVariantMap();
+}
+
 bool LibraryModel::updateBooksMetadata(const QVariantList &sourceUrls,
                                        const QVariantMap &changes)
 {

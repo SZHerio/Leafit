@@ -485,7 +485,7 @@ Item {
                         wrapMode: TextEdit.Wrap
                         color: Theme.textColor
                         selectionColor: Theme.accentColor
-                        selectedTextColor: Theme.onAccentColor
+                        selectedTextColor: Theme.accentTextColor
                         font.family: root.fontFamily
                         font.pixelSize: root.fontSize
                         font.letterSpacing: 0

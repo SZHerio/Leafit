@@ -98,6 +98,7 @@ Dialog {
                     Layout.fillWidth: true
                     visible: root.searchModel.indexing
                     value: root.searchModel.indexProgress
+                    accessibleName: qsTr("Search indexing progress")
                 }
             }
 

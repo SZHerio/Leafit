@@ -27,6 +27,7 @@ Item {
 
     property color fallbackColor: Theme.accentColor
     property bool selectionMode: false
+    property bool keyboardCurrent: false
 
     signal openRequested(url sourceUrl)
     signal relinkRequested(url sourceUrl)
@@ -35,6 +36,7 @@ Item {
                             string collectionPath,
                             bool fileAvailable)
     signal selectionToggled(url sourceUrl)
+    signal focusRequested(int row)
 
     function activate() {
         if (root.fileAvailable) {
@@ -42,6 +44,13 @@ Item {
         } else {
             root.relinkRequested(root.sourceUrl)
         }
+    }
+
+    function requestActions() {
+        root.actionsRequested(root.sourceUrl,
+                              root.title,
+                              root.collectionPath,
+                              root.fileAvailable)
     }
 
     activeFocusOnTab: true
@@ -56,12 +65,17 @@ Item {
                                      .arg(Math.round(root.progress * 100)))
                                 : qsTr("File unavailable. Locate the book to continue.")
     Accessible.focusable: true
+    Accessible.selected: root.selected || root.keyboardCurrent
     Accessible.onPressAction: root.activate()
     opacity: fileAvailable ? 1 : 0.72
     scale: cardMouseArea.containsMouse ? 1.008 : 1
     Drag.active: bookDragHandler.active && !root.selectionMode
     Drag.source: root
     Drag.keys: ["szhbooks-book"]
+    Drag.dragType: Drag.Automatic
+    Drag.mimeData: ({
+        "application/x-szhbooks-book-url": root.sourceUrl.toString()
+    })
     Drag.supportedActions: Qt.MoveAction
     Drag.hotSpot.x: width / 2
     Drag.hotSpot.y: height / 2
@@ -75,15 +89,24 @@ Item {
 
     Keys.onReturnPressed: root.selectionMode ? root.selectionToggled(root.sourceUrl) : root.activate()
     Keys.onEnterPressed: root.selectionMode ? root.selectionToggled(root.sourceUrl) : root.activate()
-    Keys.onSpacePressed: root.selectionMode ? root.selectionToggled(root.sourceUrl) : root.activate()
+    Keys.onSpacePressed: root.selectionToggled(root.sourceUrl)
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_Menu
+                || (event.key === Qt.Key_F10
+                    && (event.modifiers & Qt.ShiftModifier))) {
+            root.requestActions()
+            event.accepted = true
+        }
+    }
 
     Rectangle {
         anchors.fill: parent
         anchors.margins: 1
         color: cardMouseArea.containsMouse ? Theme.surfaceMutedColor : Theme.surfaceColor
         radius: Theme.radiusMd
-        border.color: root.activeFocus || root.selected ? Theme.focusColor : Theme.borderColor
-        border.width: root.activeFocus || root.selected ? 2 : 1
+        border.color: root.activeFocus || root.keyboardCurrent || root.selected
+                      ? Theme.focusColor : Theme.borderColor
+        border.width: root.activeFocus || root.keyboardCurrent || root.selected ? 2 : 1
 
         Behavior on color {
             ColorAnimation {
@@ -99,12 +122,15 @@ Item {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: mouse => {
-            root.forceActiveFocus()
+            root.focusRequested(root.index)
             if (root.selectionMode || (mouse.modifiers & Qt.ControlModifier)) {
                 root.selectionToggled(root.sourceUrl)
-            } else {
-                root.activate()
             }
+        }
+        onDoubleClicked: {
+            root.focusRequested(root.index)
+            if (!root.selectionMode)
+                root.activate()
         }
     }
 
@@ -180,6 +206,7 @@ Item {
             SZHProgressBar {
                 Layout.fillWidth: true
                 value: root.progress
+                accessibleName: qsTr("Reading progress")
             }
         }
 
@@ -197,13 +224,13 @@ Item {
         anchors.right: parent.right
         anchors.margins: Theme.spaceSm
         z: 2
-        visible: !root.selectionMode && (cardMouseArea.containsMouse || root.activeFocus)
+        visible: !root.selectionMode
+                 && (cardMouseArea.containsMouse
+                     || root.activeFocus
+                     || root.keyboardCurrent)
         symbol: "\u22ef"
         toolTip: qsTr("Book actions")
-        onClicked: root.actionsRequested(root.sourceUrl,
-                                         root.title,
-                                         root.collectionPath,
-                                         root.fileAvailable)
+        onClicked: root.requestActions()
     }
 
     SZHCheckBox {

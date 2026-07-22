@@ -9,6 +9,10 @@ Item {
     required property var searchController
     required property var annotationStore
 
+    Accessible.role: Accessible.Document
+    Accessible.name: readerController.title.length > 0
+                     ? readerController.title : qsTr("Reader")
+
     readonly property string readingFont: bookTypographyEnabled
                                               ? bookTypography.readingFont
                                               : settingsStore.readingFont

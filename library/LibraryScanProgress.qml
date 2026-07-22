@@ -56,6 +56,7 @@ Rectangle {
             SZHProgressBar {
                 Layout.fillWidth: true
                 value: root.libraryModel.scanProgress
+                accessibleName: qsTr("Library scan progress")
             }
         }
 

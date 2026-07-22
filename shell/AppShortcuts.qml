@@ -12,6 +12,8 @@ Item {
     signal openRequested
     signal colorThemeToggleRequested
     signal librarySearchRequested
+    signal libraryFilterRequested
+    signal libraryEscapeRequested
     signal focusModeToggleRequested
     signal focusModeExitRequested
 
@@ -26,6 +28,12 @@ Item {
         enabled: !root.showingLibrary && root.readerWorkspace.hasDocument
         sequence: StandardKey.Find
         onActivated: root.appHeader.openSearch()
+    }
+
+    Shortcut {
+        enabled: root.showingLibrary
+        sequence: StandardKey.Find
+        onActivated: root.libraryFilterRequested()
     }
 
     Shortcut {
@@ -72,6 +80,12 @@ Item {
         enabled: root.focusMode
         sequence: "Esc"
         onActivated: root.focusModeExitRequested()
+    }
+
+    Shortcut {
+        enabled: root.showingLibrary
+        sequence: "Esc"
+        onActivated: root.libraryEscapeRequested()
     }
 
     Shortcut {

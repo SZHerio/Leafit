@@ -17,6 +17,7 @@ ApplicationWindow {
     required property var notesCenterModel
     required property var librarySearchModel
     required property var oneDriveLibraryService
+    required property var desktopIntegration
 
     property bool showingLibrary: true
     property bool focusMode: false
@@ -105,6 +106,22 @@ ApplicationWindow {
             root.openSingleImportWhenReady = false
     }
 
+    function openDesktopFiles(fileUrls) {
+        if (!fileUrls || fileUrls.length === 0)
+            return
+        if (root.visibility === Window.Minimized)
+            root.showNormal()
+        else
+            root.show()
+        root.raise()
+        root.requestActivate()
+        if (fileUrls.length === 1) {
+            root.openBook(fileUrls[0])
+        } else {
+            root.addBooks(fileUrls)
+        }
+    }
+
     function showLibrary() {
         root.exitFocusMode()
         readerWorkspace.flushReadingState()
@@ -169,6 +186,7 @@ ApplicationWindow {
     onClosing: {
         readerWorkspace.flushReadingState()
         root.localStateStore.sync()
+        root.desktopIntegration.saveWindowState()
     }
 
     Binding {
@@ -185,6 +203,8 @@ ApplicationWindow {
         appHeader: appHeader
         onOpenRequested: openDialog.open()
         onLibrarySearchRequested: librarySearchDialog.open()
+        onLibraryFilterRequested: libraryView.focusSearch()
+        onLibraryEscapeRequested: libraryView.cancelLibraryAction()
         onColorThemeToggleRequested: root.toggleColorTheme()
         onFocusModeToggleRequested: root.toggleFocusMode()
         onFocusModeExitRequested: root.exitFocusMode()
@@ -290,6 +310,14 @@ ApplicationWindow {
             root.profileArchiveService.importProfile(root.pendingProfileRestoreUrl)
         }
         onClosed: root.pendingProfileRestoreUrl = ""
+    }
+
+    Connections {
+        target: root.desktopIntegration
+
+        function onFilesOpenRequested(fileUrls) {
+            root.openDesktopFiles(fileUrls)
+        }
     }
 
     Connections {
@@ -433,11 +461,14 @@ ApplicationWindow {
     }
 
     LibraryView {
+        id: libraryView
+
         anchors.fill: parent
         visible: root.showingLibrary
         opacity: root.showingLibrary ? 1 : 0
         libraryModel: root.libraryModel
         syncService: root.oneDriveLibraryService
+        desktopIntegration: root.desktopIntegration
         onAddRequested: openDialog.open()
         onOpenRequested: sourceUrl => root.openBook(sourceUrl)
         onRelinkRequested: sourceUrl => root.locateBook(sourceUrl)

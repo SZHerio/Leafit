@@ -8,6 +8,9 @@ TestCase {
 
     name: "KeyboardAndFocus"
     when: windowShown
+    visible: true
+    width: 640
+    height: 480
 
     Item {
         id: stage
@@ -533,6 +536,33 @@ TestCase {
         compare(openedUrl, "file:///C:/Books/novel.txt")
     }
 
+    function test_libraryBookRequiresDoubleClickWithMouse() {
+        const singleClickDelegate = createTemporaryObject(bookDelegateComponent, stage)
+        verify(singleClickDelegate)
+
+        let openCount = 0
+        let focusCount = 0
+        singleClickDelegate.openRequested.connect(function() { openCount += 1 })
+        singleClickDelegate.focusRequested.connect(function() { focusCount += 1 })
+        mouseClick(singleClickDelegate,
+                   singleClickDelegate.width / 2,
+                   singleClickDelegate.height / 2)
+        compare(openCount, 0)
+        compare(focusCount, 1)
+
+        const doubleClickDelegate = createTemporaryObject(bookDelegateComponent, stage)
+        verify(doubleClickDelegate)
+        doubleClickDelegate.x = 220
+        doubleClickDelegate.openRequested.connect(function() { openCount += 1 })
+        doubleClickDelegate.focusRequested.connect(function() { focusCount += 1 })
+        focusCount = 0
+        mouseDoubleClickSequence(doubleClickDelegate,
+                                 doubleClickDelegate.width / 2,
+                                 doubleClickDelegate.height / 2)
+        compare(openCount, 1)
+        verify(focusCount >= 1)
+    }
+
     function test_metadataDialogEditsSingleBook() {
         mockLibraryModel.updateCount = 0
         const dialog = createTemporaryObject(metadataDialogComponent, stage)
@@ -760,9 +790,13 @@ TestCase {
         let openCount = 0
         let themeCount = 0
         let librarySearchCount = 0
+        let libraryFilterCount = 0
+        let libraryEscapeCount = 0
         shortcuts.openRequested.connect(function() { openCount += 1 })
         shortcuts.colorThemeToggleRequested.connect(function() { themeCount += 1 })
         shortcuts.librarySearchRequested.connect(function() { librarySearchCount += 1 })
+        shortcuts.libraryFilterRequested.connect(function() { libraryFilterCount += 1 })
+        shortcuts.libraryEscapeRequested.connect(function() { libraryEscapeCount += 1 })
         shortcutWorkspace.forwardCount = 0
 
         keyClick(Qt.Key_O, Qt.ControlModifier)
@@ -774,5 +808,56 @@ TestCase {
         compare(themeCount, 1)
         compare(librarySearchCount, 1)
         compare(shortcutWorkspace.forwardCount, 1)
+
+        shortcuts.showingLibrary = true
+        keyClick(Qt.Key_F, Qt.ControlModifier)
+        keyClick(Qt.Key_Escape)
+        compare(libraryFilterCount, 1)
+        compare(libraryEscapeCount, 1)
+    }
+
+    function test_themeTextContrastMeetsWcagAa() {
+        function linearChannel(value) {
+            return value <= 0.04045 ? value / 12.92
+                                    : Math.pow((value + 0.055) / 1.055, 2.4)
+        }
+        function luminance(color) {
+            return 0.2126 * linearChannel(color.r)
+                   + 0.7152 * linearChannel(color.g)
+                   + 0.0722 * linearChannel(color.b)
+        }
+        function contrast(foreground, background) {
+            const light = Math.max(luminance(foreground), luminance(background))
+            const dark = Math.min(luminance(foreground), luminance(background))
+            return (light + 0.05) / (dark + 0.05)
+        }
+
+        const previousTheme = Theme.colorTheme
+        const themes = ["light", "dark"]
+        for (let themeIndex = 0; themeIndex < themes.length; ++themeIndex) {
+            Theme.colorTheme = themes[themeIndex]
+            const pairs = [
+                [Theme.textColor, Theme.surfaceColor],
+                [Theme.textColor, Theme.windowColor],
+                [Theme.textColor, Theme.surfaceMutedColor],
+                [Theme.mutedTextColor, Theme.surfaceColor],
+                [Theme.mutedTextColor, Theme.windowColor],
+                [Theme.primaryActionTextColor, Theme.primaryActionColor],
+                [Theme.accentTextColor, Theme.accentColor],
+                [Theme.chromeTextColor, Theme.chromeColor],
+                [Theme.chromeMutedTextColor, Theme.chromeColor],
+                [Theme.currentSearchTextColor, Theme.currentSearchMatchColor],
+                [Theme.textColor, Theme.annotationHighlightColor]
+            ]
+            for (let pairIndex = 0; pairIndex < pairs.length; ++pairIndex) {
+                const ratio = contrast(pairs[pairIndex][0], pairs[pairIndex][1])
+                verify(ratio >= 4.5,
+                       themes[themeIndex] + " contrast pair " + pairIndex
+                       + ", ratio " + ratio.toFixed(2)
+                       + ", colors " + pairs[pairIndex][0]
+                       + " / " + pairs[pairIndex][1])
+            }
+        }
+        Theme.colorTheme = previousTheme
     }
 }

@@ -15,7 +15,7 @@ TextField {
     color: Theme.textColor
     placeholderTextColor: Theme.disabledTextColor
     selectionColor: Theme.accentColor
-    selectedTextColor: Theme.onAccentColor
+    selectedTextColor: Theme.accentTextColor
     font.family: Theme.uiFontFamily
     font.pixelSize: Theme.bodyFontSize
     focusPolicy: Qt.StrongFocus

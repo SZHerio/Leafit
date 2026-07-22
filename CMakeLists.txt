@@ -84,6 +84,8 @@ target_sources(appSZHBooks PRIVATE
     library/libraryscanservice.h
     notes/notescentermodel.cpp
     notes/notescentermodel.h
+    platform/desktopintegration.cpp
+    platform/desktopintegration.h
     search/librarysearchindex.cpp
     search/librarysearchindex.h
     search/librarysearchmodel.cpp
@@ -619,6 +621,24 @@ if(BUILD_TESTING)
 
         add_test(NAME libraryservices COMMAND tst_libraryservices)
         set_tests_properties(libraryservices PROPERTIES
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
+        )
+
+        qt_add_executable(tst_desktopintegration
+            platform/desktopintegration.cpp
+            platform/desktopintegration.h
+            tests/desktopintegrationtest.cpp
+        )
+        target_link_libraries(tst_desktopintegration
+            PRIVATE
+                Qt6::Core
+                Qt6::Gui
+                Qt6::Test
+        )
+
+        add_test(NAME desktopintegration COMMAND tst_desktopintegration)
+        set_tests_properties(desktopintegration PROPERTIES
             ENVIRONMENT_MODIFICATION
                 "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
         )

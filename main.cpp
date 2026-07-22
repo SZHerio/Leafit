@@ -5,6 +5,7 @@
 #include <QStyleHints>
 #include <QVariant>
 #include <QVariantMap>
+#include <QWindow>
 #include <QtMath>
 
 #include "library/bookcoverprovider.h"
@@ -14,6 +15,7 @@
 #include "library/libraryscanservice.h"
 #include "localization/localizationcontroller.h"
 #include "notes/notescentermodel.h"
+#include "platform/desktopintegration.h"
 #include "reader/readingsearchcontroller.h"
 #include "reader/readingdocumentformatter.h"
 #include "readercontroller.h"
@@ -49,6 +51,7 @@ int main(int argc, char *argv[])
     app.setWindowIcon(QIcon(QStringLiteral(
         ":/qt/qml/SZHBooks/assets/branding/szhbooks-icon.png")));
 
+    DesktopIntegration desktopIntegration(BookMetadataService::supportedSuffixes());
     LocalStateStore localState;
     ProfileArchiveService profileArchiveService(&localState);
     const auto applyScrollSpeed = [&app, &localState]() {
@@ -124,8 +127,12 @@ int main(int argc, char *argv[])
     QObject::connect(&app,
                      &QCoreApplication::aboutToQuit,
                      &app,
-                     [&annotationStore, &localState, &oneDriveLibraryService]() {
+                     [&annotationStore,
+                      &desktopIntegration,
+                      &localState,
+                      &oneDriveLibraryService]() {
                          annotationStore.sync();
+                         desktopIntegration.saveWindowState();
                          localState.sync();
                          if (oneDriveLibraryService.configured()) {
                              oneDriveLibraryService.synchronizeNow();
@@ -156,7 +163,9 @@ int main(int argc, char *argv[])
         {QStringLiteral("librarySearchModel"),
          QVariant::fromValue(static_cast<QObject *>(&librarySearchModel))},
         {QStringLiteral("oneDriveLibraryService"),
-         QVariant::fromValue(static_cast<QObject *>(&oneDriveLibraryService))}
+         QVariant::fromValue(static_cast<QObject *>(&oneDriveLibraryService))},
+        {QStringLiteral("desktopIntegration"),
+         QVariant::fromValue(static_cast<QObject *>(&desktopIntegration))}
     });
 
     QObject::connect(
@@ -166,6 +175,12 @@ int main(int argc, char *argv[])
         []() { QCoreApplication::exit(-1); },
         Qt::QueuedConnection);
     engine.loadFromModule("SZHBooks", "Main");
+
+    if (!engine.rootObjects().isEmpty()) {
+        desktopIntegration.attachWindow(
+            qobject_cast<QWindow *>(engine.rootObjects().constFirst()));
+        desktopIntegration.setReady();
+    }
 
     return app.exec();
 }

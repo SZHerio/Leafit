@@ -58,7 +58,7 @@ Switch {
             x: control.checked ? parent.width - width - 3 : 3
             y: 3
             radius: width / 2
-            color: control.checked ? Theme.onAccentColor : Theme.surfaceColor
+            color: control.checked ? Theme.accentTextColor : Theme.surfaceColor
 
             Behavior on x {
                 NumberAnimation {

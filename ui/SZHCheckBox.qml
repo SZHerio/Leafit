@@ -30,7 +30,7 @@ CheckBox {
             anchors.centerIn: parent
             text: "\u2713"
             visible: control.checked
-            color: Theme.onAccentColor
+            color: Theme.accentTextColor
             font.family: Theme.uiFontFamily
             font.pixelSize: 13
             font.weight: Font.Bold

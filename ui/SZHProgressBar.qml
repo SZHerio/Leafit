@@ -4,8 +4,12 @@ import QtQuick.Controls
 ProgressBar {
     id: control
 
+    property string accessibleName: ""
+
     implicitWidth: 220
     implicitHeight: 4
+    Accessible.role: Accessible.ProgressBar
+    Accessible.name: control.accessibleName
 
     background: Rectangle {
         implicitHeight: 4

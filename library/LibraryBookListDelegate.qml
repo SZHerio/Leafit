@@ -27,6 +27,7 @@ Rectangle {
 
     property color fallbackColor: Theme.accentColor
     property bool selectionMode: false
+    property bool keyboardCurrent: false
 
     signal openRequested(url sourceUrl)
     signal relinkRequested(url sourceUrl)
@@ -35,6 +36,7 @@ Rectangle {
                             string collectionPath,
                             bool fileAvailable)
     signal selectionToggled(url sourceUrl)
+    signal focusRequested(int row)
 
     function activate() {
         if (root.fileAvailable) {
@@ -42,6 +44,13 @@ Rectangle {
         } else {
             root.relinkRequested(root.sourceUrl)
         }
+    }
+
+    function requestActions() {
+        root.actionsRequested(root.sourceUrl,
+                              root.title,
+                              root.collectionPath,
+                              root.fileAvailable)
     }
 
     activeFocusOnTab: true
@@ -56,15 +65,21 @@ Rectangle {
                                      .arg(Math.round(root.progress * 100)))
                                 : qsTr("File unavailable. Locate the book to continue.")
     Accessible.focusable: true
+    Accessible.selected: root.selected || root.keyboardCurrent
     Accessible.onPressAction: root.activate()
     color: rowMouseArea.containsMouse ? Theme.surfaceMutedColor : Theme.surfaceColor
     radius: Theme.radiusMd
-    border.color: activeFocus || selected ? Theme.focusColor : Theme.borderColor
-    border.width: activeFocus || selected ? 2 : 1
+    border.color: activeFocus || keyboardCurrent || selected
+                  ? Theme.focusColor : Theme.borderColor
+    border.width: activeFocus || keyboardCurrent || selected ? 2 : 1
     opacity: fileAvailable ? 1 : 0.72
     Drag.active: bookDragHandler.active && !root.selectionMode
     Drag.source: root
     Drag.keys: ["szhbooks-book"]
+    Drag.dragType: Drag.Automatic
+    Drag.mimeData: ({
+        "application/x-szhbooks-book-url": root.sourceUrl.toString()
+    })
     Drag.supportedActions: Qt.MoveAction
     Drag.hotSpot.x: width / 2
     Drag.hotSpot.y: height / 2
@@ -77,7 +92,15 @@ Rectangle {
 
     Keys.onReturnPressed: root.selectionMode ? root.selectionToggled(root.sourceUrl) : root.activate()
     Keys.onEnterPressed: root.selectionMode ? root.selectionToggled(root.sourceUrl) : root.activate()
-    Keys.onSpacePressed: root.selectionMode ? root.selectionToggled(root.sourceUrl) : root.activate()
+    Keys.onSpacePressed: root.selectionToggled(root.sourceUrl)
+    Keys.onPressed: event => {
+        if (event.key === Qt.Key_Menu
+                || (event.key === Qt.Key_F10
+                    && (event.modifiers & Qt.ShiftModifier))) {
+            root.requestActions()
+            event.accepted = true
+        }
+    }
 
     MouseArea {
         id: rowMouseArea
@@ -86,12 +109,15 @@ Rectangle {
         hoverEnabled: true
         cursorShape: Qt.PointingHandCursor
         onClicked: mouse => {
-            root.forceActiveFocus()
+            root.focusRequested(root.index)
             if (root.selectionMode || (mouse.modifiers & Qt.ControlModifier)) {
                 root.selectionToggled(root.sourceUrl)
-            } else {
-                root.activate()
             }
+        }
+        onDoubleClicked: {
+            root.focusRequested(root.index)
+            if (!root.selectionMode)
+                root.activate()
         }
     }
 
@@ -180,6 +206,7 @@ Rectangle {
             SZHProgressBar {
                 Layout.fillWidth: true
                 value: root.progress
+                accessibleName: qsTr("Reading progress")
             }
 
             Label {
@@ -205,10 +232,7 @@ Rectangle {
             visible: !root.selectionMode
             symbol: "\u22ef"
             toolTip: qsTr("Book actions")
-            onClicked: root.actionsRequested(root.sourceUrl,
-                                             root.title,
-                                             root.collectionPath,
-                                             root.fileAvailable)
+            onClicked: root.requestActions()
         }
     }
 }

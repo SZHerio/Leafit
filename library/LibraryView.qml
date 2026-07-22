@@ -9,7 +9,10 @@ Item {
 
     required property var libraryModel
     required property var syncService
+    required property var desktopIntegration
     readonly property var fileService: root.syncService.fileService
+    property var supportedDropUrls: []
+    property int unsupportedDropCount: 0
 
     signal addRequested
     signal openRequested(url sourceUrl)
@@ -18,6 +21,82 @@ Item {
     signal createCollectionRequested(string parentPath)
     signal syncDetailsRequested
     signal filesDropped(var fileUrls)
+
+    Accessible.role: Accessible.Pane
+    Accessible.name: qsTr("Library")
+
+    function updateDropPreview(fileUrls) {
+        root.supportedDropUrls = root.desktopIntegration.supportedBookUrls(fileUrls)
+        root.unsupportedDropCount = 0
+        for (let index = 0; index < fileUrls.length; ++index) {
+            if (!root.desktopIntegration.isSupportedBookUrl(fileUrls[index]))
+                root.unsupportedDropCount += 1
+        }
+    }
+
+    function clearDropPreview() {
+        root.supportedDropUrls = []
+        root.unsupportedDropCount = 0
+    }
+
+    function activeBooksView() {
+        return root.libraryModel.viewMode === "list" ? bookList : bookGrid
+    }
+
+    function focusSearch() {
+        librarySearchField.forceActiveFocus(Qt.ShortcutFocusReason)
+        librarySearchField.selectAll()
+    }
+
+    function focusBooks() {
+        const view = root.activeBooksView()
+        if (view.count <= 0)
+            return
+        if (view.currentIndex < 0)
+            view.currentIndex = 0
+        view.forceActiveFocus(Qt.ShortcutFocusReason)
+    }
+
+    function selectAllBooks() {
+        if (root.libraryModel.count <= 0)
+            return
+        root.libraryModel.selectAllVisible()
+        root.focusBooks()
+    }
+
+    function activateBookAt(row) {
+        const book = root.libraryModel.bookAt(row)
+        if (!book || book.sourceUrl === undefined)
+            return
+        if (book.fileAvailable)
+            root.openRequested(book.sourceUrl)
+        else
+            root.relinkRequested(book.sourceUrl)
+    }
+
+    function toggleBookAt(row) {
+        const book = root.libraryModel.bookAt(row)
+        if (book && book.sourceUrl !== undefined)
+            root.libraryModel.toggleSelection(book.sourceUrl)
+    }
+
+    function showBookActionsAt(row) {
+        const book = root.libraryModel.bookAt(row)
+        if (!book || book.sourceUrl === undefined)
+            return
+        bookActionsDialog.openFor(book.sourceUrl,
+                                  book.title,
+                                  book.collectionPath,
+                                  book.fileAvailable)
+    }
+
+    function cancelLibraryAction() {
+        if (root.libraryModel.selectionMode) {
+            root.libraryModel.selectionMode = false
+        } else if (librarySearchField.text.length > 0) {
+            librarySearchField.clear()
+        }
+    }
 
     function fallbackColor(row) {
         const colors = ["#111111", "#2b2b2b", "#444444", "#5d5d5d", "#242424", "#505050"]
@@ -71,11 +150,24 @@ Item {
 
         anchors.fill: parent
         keys: ["text/uri-list"]
+        onEntered: drag => {
+            if (drag.hasUrls)
+                root.updateDropPreview(drag.urls)
+            drag.accepted = drag.hasUrls
+        }
+        onExited: root.clearDropPreview()
         onDropped: drop => {
-            if (!drop.hasUrls)
+            if (!drop.hasUrls) {
+                root.clearDropPreview()
                 return
-            root.filesDropped(drop.urls)
-            drop.acceptProposedAction()
+            }
+            root.updateDropPreview(drop.urls)
+            const acceptedUrls = root.supportedDropUrls
+            root.clearDropPreview()
+            if (acceptedUrls.length === 0)
+                return
+            root.filesDropped(acceptedUrls)
+            drop.accept(Qt.CopyAction)
         }
     }
 
@@ -84,10 +176,57 @@ Item {
         anchors.fill: parent
         anchors.margins: Theme.spaceSm
         visible: externalBookDropArea.containsDrag
-        color: "transparent"
+        color: Theme.surfaceColor
+        opacity: 0.96
         border.color: Theme.strongBorderColor
         border.width: 2
         radius: Theme.radiusLg
+
+        Accessible.role: Accessible.AlertMessage
+        Accessible.name: dropStatusLabel.text
+
+        ColumnLayout {
+            anchors.centerIn: parent
+            width: Math.min(420, parent.width - Theme.space2xl)
+            spacing: Theme.spaceSm
+
+            Label {
+                Layout.alignment: Qt.AlignHCenter
+                text: root.supportedDropUrls.length > 0 ? "\u2193" : "\u00d7"
+                color: Theme.textColor
+                font.family: Theme.uiFontFamily
+                font.pixelSize: Theme.displayFontSize
+                font.weight: Font.DemiBold
+            }
+
+            Label {
+                id: dropStatusLabel
+
+                Layout.fillWidth: true
+                text: root.supportedDropUrls.length > 0
+                      ? qsTr("%n supported book(s) ready to add", "",
+                             root.supportedDropUrls.length)
+                      : qsTr("No supported book files")
+                color: Theme.textColor
+                font.family: Theme.uiFontFamily
+                font.pixelSize: Theme.titleFontSize
+                font.weight: Font.DemiBold
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+            }
+
+            Label {
+                Layout.fillWidth: true
+                visible: root.unsupportedDropCount > 0
+                text: qsTr("%n unsupported file(s) will be skipped", "",
+                           root.unsupportedDropCount)
+                color: Theme.mutedTextColor
+                font.family: Theme.uiFontFamily
+                font.pixelSize: Theme.bodyFontSize
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.Wrap
+            }
+        }
     }
 
     ColumnLayout {
@@ -126,11 +265,16 @@ Item {
             }
 
             SZHTextField {
+                id: librarySearchField
+
+                objectName: "libraryFilterField"
                 Layout.preferredWidth: root.width < 900 ? 180 : 300
                 Layout.minimumWidth: 140
                 placeholderText: qsTr("Search library")
+                accessibleName: qsTr("Filter library books")
                 text: root.libraryModel.filterText
                 onTextEdited: root.libraryModel.filterText = text
+                Keys.onDownPressed: root.focusBooks()
             }
 
             SZHIconButton {
@@ -321,14 +465,47 @@ Item {
                         cellWidth: Math.floor(availableGridWidth / columnCount)
                         cellHeight: 300
                         boundsBehavior: Flickable.StopAtBounds
+                        activeFocusOnTab: true
+                        keyNavigationEnabled: true
                         visible: root.libraryModel.count > 0 && root.libraryModel.viewMode === "grid"
+                        currentIndex: count > 0 ? 0 : -1
+                        Accessible.role: Accessible.List
+                        Accessible.name: qsTr("Library books, grid view")
                         ScrollBar.vertical: SZHScrollBar {}
+
+                        Keys.onReturnPressed: {
+                            root.activateBookAt(currentIndex)
+                        }
+                        Keys.onEnterPressed: {
+                            root.activateBookAt(currentIndex)
+                        }
+                        Keys.onSpacePressed: {
+                            root.toggleBookAt(currentIndex)
+                        }
+                        Keys.onPressed: event => {
+                            if ((event.modifiers & Qt.ControlModifier)
+                                    && event.key === Qt.Key_A) {
+                                root.selectAllBooks()
+                                event.accepted = true
+                            } else if (currentIndex >= 0
+                                    && (event.key === Qt.Key_Menu
+                                        || (event.key === Qt.Key_F10
+                                            && (event.modifiers & Qt.ShiftModifier)))) {
+                                root.showBookActionsAt(currentIndex)
+                                event.accepted = true
+                            }
+                        }
 
                         delegate: LibraryBookDelegate {
                             width: bookGrid.cellWidth - Theme.spaceSm
                             height: bookGrid.cellHeight - Theme.spaceSm
                             fallbackColor: root.fallbackColor(index)
                             selectionMode: root.libraryModel.selectionMode
+                            keyboardCurrent: GridView.isCurrentItem && bookGrid.activeFocus
+                            onFocusRequested: row => {
+                                bookGrid.currentIndex = row
+                                bookGrid.forceActiveFocus(Qt.MouseFocusReason)
+                            }
                             onOpenRequested: sourceUrl => root.openRequested(sourceUrl)
                             onRelinkRequested: sourceUrl => root.relinkRequested(sourceUrl)
                             onSelectionToggled: sourceUrl => root.libraryModel.toggleSelection(sourceUrl)
@@ -346,14 +523,47 @@ Item {
                         model: root.libraryModel
                         spacing: Theme.spaceXs
                         boundsBehavior: Flickable.StopAtBounds
+                        activeFocusOnTab: true
+                        keyNavigationEnabled: true
                         visible: root.libraryModel.count > 0 && root.libraryModel.viewMode === "list"
+                        currentIndex: count > 0 ? 0 : -1
+                        Accessible.role: Accessible.List
+                        Accessible.name: qsTr("Library books, list view")
                         ScrollBar.vertical: SZHScrollBar {}
+
+                        Keys.onReturnPressed: {
+                            root.activateBookAt(currentIndex)
+                        }
+                        Keys.onEnterPressed: {
+                            root.activateBookAt(currentIndex)
+                        }
+                        Keys.onSpacePressed: {
+                            root.toggleBookAt(currentIndex)
+                        }
+                        Keys.onPressed: event => {
+                            if ((event.modifiers & Qt.ControlModifier)
+                                    && event.key === Qt.Key_A) {
+                                root.selectAllBooks()
+                                event.accepted = true
+                            } else if (currentIndex >= 0
+                                    && (event.key === Qt.Key_Menu
+                                        || (event.key === Qt.Key_F10
+                                            && (event.modifiers & Qt.ShiftModifier)))) {
+                                root.showBookActionsAt(currentIndex)
+                                event.accepted = true
+                            }
+                        }
 
                         delegate: LibraryBookListDelegate {
                             width: bookList.width
                             height: 82
                             fallbackColor: root.fallbackColor(index)
                             selectionMode: root.libraryModel.selectionMode
+                            keyboardCurrent: ListView.isCurrentItem && bookList.activeFocus
+                            onFocusRequested: row => {
+                                bookList.currentIndex = row
+                                bookList.forceActiveFocus(Qt.MouseFocusReason)
+                            }
                             onOpenRequested: sourceUrl => root.openRequested(sourceUrl)
                             onRelinkRequested: sourceUrl => root.relinkRequested(sourceUrl)
                             onSelectionToggled: sourceUrl => root.libraryModel.toggleSelection(sourceUrl)

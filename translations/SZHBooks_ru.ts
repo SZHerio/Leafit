@@ -313,6 +313,7 @@
       <translation>Действия с книгой</translation>
     </message>
     <message><source>Select %1</source><translation>Выбрать «%1»</translation></message>
+    <message><source>Reading progress</source><translation>Прогресс чтения</translation></message>
   </context>
   <context>
     <name>LibraryBookListDelegate</name>
@@ -366,6 +367,7 @@
       <translation>Действия с книгой</translation>
     </message>
     <message><source>Select %1</source><translation>Выбрать «%1»</translation></message>
+    <message><source>Reading progress</source><translation>Прогресс чтения</translation></message>
   </context>
   <context>
     <name>LibraryContinueCard</name>
@@ -399,6 +401,7 @@
       <source>Online-only  ·  Downloads when opened</source>
       <translation>Только в облаке  ·  Загрузится при открытии</translation>
     </message>
+    <message><source>Reading progress</source><translation>Прогресс чтения</translation></message>
   </context>
   <context>
     <name>LibraryControls</name>
@@ -692,6 +695,12 @@
     <message><source>Select all</source><translation>Выбрать все</translation></message>
     <message><source>Edit details</source><translation>Изменить сведения</translation></message>
     <message><source>Done</source><translation>Готово</translation></message>
+    <message numerus="yes"><source>%n supported book(s) ready to add</source><translation><numerusform>%n поддерживаемая книга готова к добавлению</numerusform><numerusform>%n поддерживаемые книги готовы к добавлению</numerusform><numerusform>%n поддерживаемых книг готово к добавлению</numerusform></translation></message>
+    <message><source>No supported book files</source><translation>Нет файлов поддерживаемых форматов</translation></message>
+    <message numerus="yes"><source>%n unsupported file(s) will be skipped</source><translation><numerusform>%n неподдерживаемый файл будет пропущен</numerusform><numerusform>%n неподдерживаемых файла будут пропущены</numerusform><numerusform>%n неподдерживаемых файлов будут пропущены</numerusform></translation></message>
+    <message><source>Filter library books</source><translation>Фильтр книг библиотеки</translation></message>
+    <message><source>Library books, grid view</source><translation>Книги библиотеки, сетка</translation></message>
+    <message><source>Library books, list view</source><translation>Книги библиотеки, список</translation></message>
   </context>
   <context>
     <name>LocalDocumentLoader</name>
@@ -1416,6 +1425,7 @@
       <source>%1%</source>
       <translation>%1%</translation>
     </message>
+    <message><source>Reader</source><translation>Читалка</translation></message>
   </context>
   <context>
     <name>ReadingSettingsPopup</name>
@@ -1750,6 +1760,7 @@
     <message><source>Library root</source><translation>Корень библиотеки</translation></message>
     <message><source>Folders</source><translation>Папки</translation></message>
     <message><source>New folder</source><translation>Новая папка</translation></message>
+    <message><source>Library folders</source><translation>Папки библиотеки</translation></message>
   </context>
   <context>
     <name>LibraryImportProgress</name>
@@ -1757,6 +1768,7 @@
     <message><source>Importing %1</source><translation>Импорт: %1</translation></message>
     <message><source>%1 of %2</source><translation>%1 из %2</translation></message>
     <message><source>Cancel import</source><translation>Отменить импорт</translation></message>
+    <message><source>Book import progress</source><translation>Ход импорта книг</translation></message>
   </context>
   <context>
     <name>LibraryScanProgress</name>
@@ -1764,6 +1776,7 @@
     <message><source>Updating book details</source><translation>Обновление сведений о книгах</translation></message>
     <message><source>%1 of %2</source><translation>%1 из %2</translation></message>
     <message><source>Cancel library scan</source><translation>Отменить сканирование библиотеки</translation></message>
+    <message><source>Library scan progress</source><translation>Ход сканирования библиотеки</translation></message>
   </context>
   <context>
     <name>LibraryFileService</name>
@@ -1968,6 +1981,7 @@
     <message><source>Finishing the current book...</source><translation>Завершение обработки текущей книги...</translation></message>
     <message><source>Indexing %1 of %2 books</source><translation>Индексация книг: %1 из %2</translation></message>
     <message><source>Cancel indexing</source><translation>Отменить индексацию</translation></message>
+    <message><source>Search indexing progress</source><translation>Ход поисковой индексации</translation></message>
     <message><source>Updating the local search index...</source><translation>Обновление локального поискового индекса...</translation></message>
     <message><source>Add books to search their contents</source><translation>Добавьте книги, чтобы искать по их содержимому</translation></message>
     <message><source>%1 of %2 books indexed, %3 skipped</source><translation>Проиндексировано книг: %1 из %2, пропущено: %3</translation></message>
