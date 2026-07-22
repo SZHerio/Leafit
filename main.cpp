@@ -9,6 +9,7 @@
 #include <QtMath>
 
 #include "library/bookcoverprovider.h"
+#include "diagnostics/diagnosticservice.h"
 #include "library/bookmetadataservice.h"
 #include "library/librarymodel.h"
 #include "library/libraryrepository.h"
@@ -51,8 +52,12 @@ int main(int argc, char *argv[])
     app.setWindowIcon(QIcon(QStringLiteral(
         ":/qt/qml/SZHBooks/assets/branding/szhbooks-icon.png")));
 
+    DiagnosticService diagnosticService;
     DesktopIntegration desktopIntegration(BookMetadataService::supportedSuffixes());
     LocalStateStore localState;
+    if (localState.profileRecoveryState() != QLatin1String("healthy")) {
+        qWarning().noquote() << localState.profileRecoveryMessage();
+    }
     ProfileArchiveService profileArchiveService(&localState);
     const auto applyScrollSpeed = [&app, &localState]() {
         // This hint is shared by every Qt Quick scroll view, including the PDF table view.
@@ -165,7 +170,9 @@ int main(int argc, char *argv[])
         {QStringLiteral("oneDriveLibraryService"),
          QVariant::fromValue(static_cast<QObject *>(&oneDriveLibraryService))},
         {QStringLiteral("desktopIntegration"),
-         QVariant::fromValue(static_cast<QObject *>(&desktopIntegration))}
+         QVariant::fromValue(static_cast<QObject *>(&desktopIntegration))},
+        {QStringLiteral("diagnosticService"),
+         QVariant::fromValue(static_cast<QObject *>(&diagnosticService))}
     });
 
     QObject::connect(

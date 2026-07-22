@@ -8,6 +8,7 @@
 
 #include <QFile>
 #include <QFileInfo>
+#include <QDir>
 #include <QImage>
 #include <QSettings>
 #include <QSqlDatabase>
@@ -27,6 +28,8 @@ private slots:
     void migratesLegacyScrollSpeed();
     void migratesProfileDataToSqlite();
     void migratesSqliteMetadataSchema();
+    void restoresCorruptDatabaseFromAutomaticBackup();
+    void quarantinesDatabaseWhenNoBackupCanRecoverIt();
     void resetsReadingPreferences();
     void keepsIndependentDocumentPositions();
     void persistsBookTypography();
@@ -275,6 +278,23 @@ void LocalStateStoreTest::migratesSqliteMetadataSchema()
                  QStringList({QStringLiteral("Migrated")}));
     }
 
+    const QString migrationBackupPath = ProfileDatabase::migrationBackupPath(databasePath, 1);
+    QVERIFY(QFileInfo::exists(migrationBackupPath));
+    const QString backupConnection = connectionName + QStringLiteral("-backup");
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"),
+                                                          backupConnection);
+        database.setDatabaseName(migrationBackupPath);
+        QVERIFY(database.open());
+        QSqlQuery query(database);
+        QVERIFY(query.exec(QStringLiteral(
+            "SELECT value FROM schema_meta WHERE key = 'version'")));
+        QVERIFY(query.next());
+        QCOMPARE(query.value(0).toInt(), 1);
+        database.close();
+    }
+    QSqlDatabase::removeDatabase(backupConnection);
+
     const QString verifyConnection = connectionName + QStringLiteral("-verify");
     {
         QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"),
@@ -289,6 +309,71 @@ void LocalStateStoreTest::migratesSqliteMetadataSchema()
         database.close();
     }
     QSqlDatabase::removeDatabase(verifyConnection);
+}
+
+void LocalStateStoreTest::restoresCorruptDatabaseFromAutomaticBackup()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString settingsPath = directory.filePath(QStringLiteral("settings.ini"));
+    const QString databasePath = ProfileDatabase::databasePathForSettings(settingsPath);
+    const QString bookPath = directory.filePath(QStringLiteral("recovered-book.txt"));
+    QFile bookFile(bookPath);
+    QVERIFY(bookFile.open(QIODevice::WriteOnly));
+    QVERIFY(bookFile.write("Recovered book") > 0);
+    bookFile.close();
+    const QUrl bookUrl = QUrl::fromLocalFile(bookPath);
+
+    {
+        LocalStateStore store(settingsPath);
+        store.registerLibraryBook(bookUrl,
+                                  QStringLiteral("Recovered title"),
+                                  QStringLiteral("Author"),
+                                  QStringLiteral("TXT"),
+                                  {},
+                                  QStringLiteral("fingerprint"),
+                                  QStringLiteral("Recovered"));
+        store.saveTextState(bookUrl, 0.42, 128);
+        store.sync();
+    }
+    QVERIFY(QFileInfo::exists(ProfileDatabase::recoveryBackupPath(databasePath)));
+
+    QFile damaged(databasePath);
+    QVERIFY(damaged.open(QIODevice::WriteOnly | QIODevice::Truncate));
+    QVERIFY(damaged.write("not a sqlite database") > 0);
+    damaged.close();
+
+    LocalStateStore recovered(settingsPath);
+    QCOMPARE(recovered.profileRecoveryState(), QStringLiteral("restored"));
+    QVERIFY(!recovered.profileRecoveryMessage().isEmpty());
+    QCOMPARE(recovered.libraryBooks().size(), 1);
+    QCOMPARE(recovered.libraryBooks().constFirst().title, QStringLiteral("Recovered title"));
+    QCOMPARE(recovered.textCharacterPosition(bookUrl), 128);
+    QVERIFY(!QDir(directory.path())
+                 .entryList({QStringLiteral("library.sqlite.corrupt-*")}, QDir::Files)
+                 .isEmpty());
+}
+
+void LocalStateStoreTest::quarantinesDatabaseWhenNoBackupCanRecoverIt()
+{
+    QTemporaryDir directory;
+    QVERIFY(directory.isValid());
+
+    const QString settingsPath = directory.filePath(QStringLiteral("settings.ini"));
+    const QString databasePath = ProfileDatabase::databasePathForSettings(settingsPath);
+    QFile damaged(databasePath);
+    QVERIFY(damaged.open(QIODevice::WriteOnly));
+    QVERIFY(damaged.write("irrecoverable profile") > 0);
+    damaged.close();
+
+    LocalStateStore recovered(settingsPath);
+    QCOMPARE(recovered.profileRecoveryState(), QStringLiteral("reset"));
+    QVERIFY(recovered.profileDatabase()->isOpen());
+    QVERIFY(recovered.libraryBooks().isEmpty());
+    QVERIFY(!QDir(directory.path())
+                 .entryList({QStringLiteral("library.sqlite.corrupt-*")}, QDir::Files)
+                 .isEmpty());
 }
 
 void LocalStateStoreTest::resetsReadingPreferences()

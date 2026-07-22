@@ -25,10 +25,16 @@ public:
     ProfileDatabase &operator=(const ProfileDatabase &) = delete;
 
     static QString databasePathForSettings(const QString &settingsFilePath);
+    static QString recoveryBackupPath(const QString &databaseFilePath);
+    static QString migrationBackupPath(const QString &databaseFilePath,
+                                       int sourceVersion);
 
     bool isOpen() const;
     QString filePath() const;
     QString errorMessage() const;
+    QString recoveryState() const;
+    QString recoveryMessage() const;
+    QString latestMigrationBackupPath() const;
 
     bool migrateLegacySettings(QSettings *settings, QString *errorMessage = nullptr);
     QVariantMap profileValues() const;
@@ -91,8 +97,18 @@ public:
     void sync();
 
 private:
+    bool openDatabase();
+    bool validateIntegrity(QString *errorMessage = nullptr) const;
+    bool recoverOrReset(const QString &failureMessage);
+    bool restoreBackup(const QString &backupPath,
+                       const QString &failureMessage);
     bool initializeSchema();
     bool createSchema();
+    int storedSchemaVersion(bool *ok = nullptr) const;
+    bool createSnapshot(const QString &destinationPath,
+                        QString *errorMessage = nullptr) const;
+    bool createMigrationBackup(int sourceVersion);
+    qint64 totalChangeCount() const;
     bool ensureBookRecord(const QUrl &documentUrl);
     bool importProfileValues(const QVariantMap &values, QString *errorMessage);
     bool clearProfileData();
@@ -103,4 +119,8 @@ private:
     QString m_connectionName;
     QSqlDatabase m_database;
     mutable QString m_errorMessage;
+    QString m_recoveryState = QStringLiteral("healthy");
+    QString m_recoveryMessage;
+    QString m_latestMigrationBackupPath;
+    qint64 m_lastSnapshotChangeCount = -1;
 };

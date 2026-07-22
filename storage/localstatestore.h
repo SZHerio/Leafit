@@ -26,6 +26,8 @@ class LocalStateStore final : public QObject, public ProfileStorage
     Q_PROPERTY(int pageWidth READ pageWidth WRITE setPageWidth NOTIFY pageWidthChanged)
     Q_PROPERTY(int scrollSpeed READ scrollSpeed WRITE setScrollSpeed NOTIFY scrollSpeedChanged)
     Q_PROPERTY(QUrl lastBookUrl READ lastBookUrl WRITE setLastBookUrl NOTIFY lastBookUrlChanged)
+    Q_PROPERTY(QString profileRecoveryState READ profileRecoveryState CONSTANT)
+    Q_PROPERTY(QString profileRecoveryMessage READ profileRecoveryMessage CONSTANT)
 
 public:
     explicit LocalStateStore(QObject *parent = nullptr);
@@ -47,6 +49,8 @@ public:
     QString libraryViewMode() const;
     QString settingsFilePath() const;
     QString databaseFilePath() const;
+    QString profileRecoveryState() const;
+    QString profileRecoveryMessage() const;
     ProfileDatabase *profileDatabase();
     QVariantMap profileValues() const override;
     bool replaceProfileValues(const QVariantMap &values,

@@ -320,6 +320,16 @@ QString LocalStateStore::databaseFilePath() const
     return m_profileDatabase.filePath();
 }
 
+QString LocalStateStore::profileRecoveryState() const
+{
+    return m_profileDatabase.recoveryState();
+}
+
+QString LocalStateStore::profileRecoveryMessage() const
+{
+    return m_profileDatabase.recoveryMessage();
+}
+
 ProfileDatabase *LocalStateStore::profileDatabase()
 {
     return &m_profileDatabase;

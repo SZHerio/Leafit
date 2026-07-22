@@ -47,6 +47,8 @@ target_sources(appSZHBooks PRIVATE
     archive/ziparchivewriter.h
     archive/zippathutils.cpp
     archive/zippathutils.h
+    diagnostics/diagnosticservice.cpp
+    diagnostics/diagnosticservice.h
     document/docxcontentrenderer.cpp
     document/docxcontentrenderer.h
     document/documentlimits.h
@@ -313,6 +315,24 @@ if(BUILD_TESTING)
 
         add_test(NAME localstatestore COMMAND tst_localstatestore)
         set_tests_properties(localstatestore PROPERTIES
+            ENVIRONMENT_MODIFICATION
+                "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
+        )
+
+        qt_add_executable(tst_diagnosticservice
+            diagnostics/diagnosticservice.cpp
+            diagnostics/diagnosticservice.h
+            tests/diagnosticservicetest.cpp
+        )
+        target_link_libraries(tst_diagnosticservice
+            PRIVATE
+                Qt6::Core
+                Qt6::Gui
+                Qt6::Test
+        )
+
+        add_test(NAME diagnosticservice COMMAND tst_diagnosticservice)
+        set_tests_properties(diagnosticservice PROPERTIES
             ENVIRONMENT_MODIFICATION
                 "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
         )
@@ -751,6 +771,17 @@ if(BUILD_TESTING)
                     "PATH=path_list_prepend:$<TARGET_FILE_DIR:Qt6::Core>"
             )
         endif()
+
+        get_filename_component(SZHBOOKS_QT_PLUGIN_DIR
+            "${Qt6_DIR}/../../../plugins"
+            ABSOLUTE
+        )
+        get_property(SZHBOOKS_CONFIGURED_TESTS DIRECTORY PROPERTY TESTS)
+        foreach(SZHBOOKS_TEST_NAME IN LISTS SZHBOOKS_CONFIGURED_TESTS)
+            set_property(TEST ${SZHBOOKS_TEST_NAME} APPEND PROPERTY ENVIRONMENT
+                "QT_PLUGIN_PATH=${SZHBOOKS_QT_PLUGIN_DIR}"
+            )
+        endforeach()
     endif()
 endif()
 

@@ -8,6 +8,7 @@ Popup {
 
     required property var settingsStore
     required property var localizationController
+    required property var diagnosticService
     required property var readerWorkspace
     property bool textSettingsAvailable: true
 
@@ -468,6 +469,13 @@ Popup {
                         variant: "secondary"
                         onClicked: root.restoreRequested()
                     }
+                }
+
+                SZHButton {
+                    Layout.fillWidth: true
+                    text: qsTr("Open diagnostics folder")
+                    variant: "ghost"
+                    onClicked: root.diagnosticService.openLogDirectory()
                 }
             }
 

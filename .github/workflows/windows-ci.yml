@@ -1,0 +1,88 @@
+name: Windows CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test-package:
+    runs-on: windows-2022
+    timeout-minutes: 45
+
+    steps:
+      - name: Check out sources
+        uses: actions/checkout@v4
+
+      - name: Enable MSVC
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
+      - name: Install Qt
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: 6.8.3
+          arch: win64_msvc2022_64
+          modules: qtpdf
+          tools: tools_ifw
+          cache: true
+
+      - name: Locate Qt Installer Framework
+        shell: pwsh
+        run: |
+          $binaryCreator = (Get-Command binarycreator.exe -ErrorAction Stop).Source
+          $ifwRoot = Split-Path (Split-Path $binaryCreator -Parent) -Parent
+          "SZHBOOKS_IFW_ROOT=$ifwRoot" | Out-File -FilePath $env:GITHUB_ENV -Append
+
+      - name: Configure
+        shell: pwsh
+        run: >-
+          cmake -S . -B build/ci -G Ninja
+          -DCMAKE_BUILD_TYPE=Release
+          -DBUILD_TESTING=ON
+          -DCPACK_IFW_ROOT="$env:SZHBOOKS_IFW_ROOT"
+
+      - name: Build
+        run: cmake --build build/ci --parallel
+
+      - name: Validate QML
+        run: cmake --build build/ci --target appSZHBooks_qmllint
+
+      - name: Run tests
+        run: ctest --test-dir build/ci -C Release --output-on-failure
+
+      - name: Verify clean install tree
+        shell: pwsh
+        run: |
+          cmake --install build/ci --prefix "$pwd/build/ci-install" --config Release
+          cmake -DSZHBOOKS_INSTALL_ROOT="$pwd/build/ci-install" -P cmake/verify_install.cmake
+
+      - name: Build ZIP and installer
+        working-directory: build/ci
+        shell: pwsh
+        run: |
+          cpack -G ZIP -C Release
+          cpack -G IFW -C Release
+
+      - name: Verify packages
+        shell: pwsh
+        run: |
+          $packages = Get-ChildItem build/ci -File | Where-Object { $_.Extension -in '.zip', '.exe' }
+          if (($packages | Where-Object Extension -eq '.zip').Count -lt 1) { throw 'ZIP package is missing.' }
+          if (($packages | Where-Object Extension -eq '.exe').Count -lt 1) { throw 'IFW installer is missing.' }
+          $packages | Format-Table Name, Length
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: SZHBooks-windows-${{ github.sha }}
+          path: |
+            build/ci/*.zip
+            build/ci/*.exe
+          if-no-files-found: error
+          retention-days: 14

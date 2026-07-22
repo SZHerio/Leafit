@@ -3,16 +3,20 @@
 #include "documentstoragekey.h"
 
 #include <QDateTime>
+#include <QDebug>
 #include <QDir>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonArray>
 #include <QJsonDocument>
+#include <QSaveFile>
 #include <QSettings>
 #include <QSqlError>
 #include <QSqlQuery>
 #include <QUuid>
 
 #include <algorithm>
+#include <utility>
 
 namespace {
 
@@ -153,6 +157,130 @@ QString annotationFieldKey(const QString &documentId,
     return annotationsPrefix + documentId + u'/' + annotationId + u'/' + field;
 }
 
+QString quotedSqlitePath(QString path)
+{
+    path.replace(u'\'', QStringLiteral("''"));
+    return path;
+}
+
+bool copyFileAtomically(const QString &sourcePath,
+                        const QString &destinationPath,
+                        QString *errorMessage)
+{
+    QFile source(sourcePath);
+    if (!source.open(QIODevice::ReadOnly)) {
+        if (errorMessage) {
+            *errorMessage = source.errorString();
+        }
+        return false;
+    }
+
+    QSaveFile destination(destinationPath);
+    if (!destination.open(QIODevice::WriteOnly)) {
+        if (errorMessage) {
+            *errorMessage = destination.errorString();
+        }
+        return false;
+    }
+
+    constexpr qint64 chunkSize = 1024 * 1024;
+    while (!source.atEnd()) {
+        const QByteArray chunk = source.read(chunkSize);
+        if (chunk.isEmpty() && source.error() != QFileDevice::NoError) {
+            if (errorMessage) {
+                *errorMessage = source.errorString();
+            }
+            destination.cancelWriting();
+            return false;
+        }
+        if (destination.write(chunk) != chunk.size()) {
+            if (errorMessage) {
+                *errorMessage = destination.errorString();
+            }
+            destination.cancelWriting();
+            return false;
+        }
+    }
+    if (!destination.commit()) {
+        if (errorMessage) {
+            *errorMessage = destination.errorString();
+        }
+        return false;
+    }
+    if (errorMessage) {
+        errorMessage->clear();
+    }
+    return true;
+}
+
+bool sqliteFileIsValid(const QString &filePath, QString *errorMessage)
+{
+    if (!QFileInfo::exists(filePath)) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("The database file does not exist.");
+        }
+        return false;
+    }
+
+    const QString connectionName = QStringLiteral("szhbooks-profile-check-%1").arg(
+        QUuid::createUuid().toString(QUuid::WithoutBraces));
+    bool valid = false;
+    QString failure;
+    {
+        QSqlDatabase database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"),
+                                                          connectionName);
+        database.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY"));
+        database.setDatabaseName(filePath);
+        if (!database.open()) {
+            failure = database.lastError().text();
+        } else {
+            QSqlQuery query(database);
+            if (!query.exec(QStringLiteral("PRAGMA quick_check(1)")) || !query.next()) {
+                failure = query.lastError().text();
+            } else if (query.value(0).toString().compare(QStringLiteral("ok"),
+                                                        Qt::CaseInsensitive) != 0) {
+                failure = query.value(0).toString();
+            } else {
+                valid = true;
+            }
+            database.close();
+        }
+    }
+    QSqlDatabase::removeDatabase(connectionName);
+    if (errorMessage) {
+        *errorMessage = valid ? QString() : failure;
+    }
+    return valid;
+}
+
+QString quarantineDatabaseFiles(const QString &databasePath, QString *errorMessage)
+{
+    if (!QFileInfo::exists(databasePath)) {
+        return {};
+    }
+
+    const QString timestamp = QDateTime::currentDateTimeUtc().toString(
+        QStringLiteral("yyyyMMdd-HHmmss-zzz"));
+    const QString quarantinePath = databasePath + QStringLiteral(".corrupt-") + timestamp;
+    const QStringList suffixes = {QString(), QStringLiteral("-wal"), QStringLiteral("-shm")};
+    for (const QString &suffix : suffixes) {
+        const QString sourcePath = databasePath + suffix;
+        if (!QFileInfo::exists(sourcePath)) {
+            continue;
+        }
+        if (!QFile::rename(sourcePath, quarantinePath + suffix)) {
+            if (errorMessage) {
+                *errorMessage = QStringLiteral("Could not quarantine %1.").arg(sourcePath);
+            }
+            return {};
+        }
+    }
+    if (errorMessage) {
+        errorMessage->clear();
+    }
+    return quarantinePath;
+}
+
 } // namespace
 
 ProfileDatabase::ProfileDatabase(const QString &databaseFilePath)
@@ -167,13 +295,20 @@ ProfileDatabase::ProfileDatabase(const QString &databaseFilePath)
 
     m_database = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), m_connectionName);
     m_database.setDatabaseName(m_filePath);
-    if (!m_database.open()) {
-        setLastError(m_database.lastError().text());
+    if (!openDatabase()) {
         return;
     }
     if (!initializeSchema()) {
         m_database.close();
+        return;
     }
+
+    QString snapshotError;
+    if (!createSnapshot(recoveryBackupPath(m_filePath), &snapshotError)) {
+        qWarning().noquote() << "Could not refresh the automatic profile backup:"
+                             << snapshotError;
+    }
+    m_lastSnapshotChangeCount = totalChangeCount();
 }
 
 ProfileDatabase::~ProfileDatabase()
@@ -198,6 +333,18 @@ QString ProfileDatabase::databasePathForSettings(const QString &settingsFilePath
     return QDir(settingsInfo.absolutePath()).filePath(databaseName);
 }
 
+QString ProfileDatabase::recoveryBackupPath(const QString &databaseFilePath)
+{
+    return QFileInfo(databaseFilePath).absoluteFilePath() + QStringLiteral(".recovery.bak");
+}
+
+QString ProfileDatabase::migrationBackupPath(const QString &databaseFilePath,
+                                             int sourceVersion)
+{
+    return QFileInfo(databaseFilePath).absoluteFilePath()
+           + QStringLiteral(".migration-v%1.bak").arg(sourceVersion);
+}
+
 bool ProfileDatabase::isOpen() const
 {
     return m_database.isOpen();
@@ -213,24 +360,175 @@ QString ProfileDatabase::errorMessage() const
     return m_errorMessage;
 }
 
-bool ProfileDatabase::initializeSchema()
+QString ProfileDatabase::recoveryState() const
 {
-    if (!execute(QStringLiteral("PRAGMA foreign_keys = ON"))
-        || !execute(QStringLiteral("PRAGMA journal_mode = WAL"))
-        || !execute(QStringLiteral("PRAGMA synchronous = NORMAL"))
-        || !createSchema()) {
+    return m_recoveryState;
+}
+
+QString ProfileDatabase::recoveryMessage() const
+{
+    return m_recoveryMessage;
+}
+
+QString ProfileDatabase::latestMigrationBackupPath() const
+{
+    return m_latestMigrationBackupPath;
+}
+
+bool ProfileDatabase::openDatabase()
+{
+    const bool databaseExisted = QFileInfo::exists(m_filePath);
+    if (!m_database.open()) {
+        const QString failure = m_database.lastError().text();
+        if (databaseExisted && recoverOrReset(failure)) {
+            return true;
+        }
+        m_recoveryState = QStringLiteral("unavailable");
+        setLastError(failure);
+        return false;
+    }
+
+    QString integrityError;
+    if (validateIntegrity(&integrityError)) {
+        return true;
+    }
+    if (databaseExisted && recoverOrReset(integrityError)) {
+        return true;
+    }
+
+    m_recoveryState = QStringLiteral("unavailable");
+    setLastError(integrityError);
+    return false;
+}
+
+bool ProfileDatabase::validateIntegrity(QString *errorMessage) const
+{
+    if (!m_database.isOpen()) {
+        if (errorMessage) {
+            *errorMessage = m_database.lastError().text();
+        }
         return false;
     }
 
     QSqlQuery query(m_database);
-    query.prepare(QStringLiteral("SELECT value FROM schema_meta WHERE key = 'version'"));
-    if (!query.exec()) {
-        setLastError(query.lastError().text());
+    if (!query.exec(QStringLiteral("PRAGMA quick_check(1)")) || !query.next()) {
+        if (errorMessage) {
+            *errorMessage = query.lastError().text();
+        }
         return false;
     }
-    const int storedVersion = query.next() ? query.value(0).toInt() : 0;
+    const QString result = query.value(0).toString();
+    const bool valid = result.compare(QStringLiteral("ok"), Qt::CaseInsensitive) == 0;
+    if (errorMessage) {
+        *errorMessage = valid ? QString() : result;
+    }
+    return valid;
+}
+
+bool ProfileDatabase::recoverOrReset(const QString &failureMessage)
+{
+    m_database.close();
+
+    QStringList candidates = {recoveryBackupPath(m_filePath)};
+    const QFileInfo databaseInfo(m_filePath);
+    const QFileInfoList migrationBackups = databaseInfo.dir().entryInfoList(
+        {databaseInfo.fileName() + QStringLiteral(".migration-v*.bak")},
+        QDir::Files,
+        QDir::Time);
+    for (const QFileInfo &backup : migrationBackups) {
+        candidates.append(backup.absoluteFilePath());
+    }
+
+    for (const QString &candidate : std::as_const(candidates)) {
+        QString validationError;
+        if (sqliteFileIsValid(candidate, &validationError)
+            && restoreBackup(candidate, failureMessage)) {
+            return true;
+        }
+        if (QFileInfo::exists(candidate)) {
+            qWarning().noquote() << "Skipping invalid profile backup" << candidate << ':'
+                                 << validationError;
+        }
+    }
+
+    QString quarantineError;
+    const QString quarantinePath = quarantineDatabaseFiles(m_filePath, &quarantineError);
+    if (quarantinePath.isEmpty()) {
+        setLastError(quarantineError.isEmpty() ? failureMessage : quarantineError);
+        return false;
+    }
+    if (!m_database.open()) {
+        setLastError(m_database.lastError().text());
+        return false;
+    }
+
+    m_recoveryState = QStringLiteral("reset");
+    m_recoveryMessage = QStringLiteral(
+        "The damaged profile could not be recovered. A fresh profile was created; "
+        "the original database was preserved at %1. Cause: %2")
+                            .arg(quarantinePath, failureMessage);
+    qCritical().noquote() << m_recoveryMessage;
+    return true;
+}
+
+bool ProfileDatabase::restoreBackup(const QString &backupPath,
+                                    const QString &failureMessage)
+{
+    QString quarantineError;
+    const QString quarantinePath = quarantineDatabaseFiles(m_filePath, &quarantineError);
+    if (quarantinePath.isEmpty()) {
+        setLastError(quarantineError);
+        return false;
+    }
+
+    QString copyError;
+    if (!copyFileAtomically(backupPath, m_filePath, &copyError)) {
+        setLastError(copyError);
+        return false;
+    }
+    if (!m_database.open()) {
+        setLastError(m_database.lastError().text());
+        return false;
+    }
+
+    QString integrityError;
+    if (!validateIntegrity(&integrityError)) {
+        m_database.close();
+        setLastError(integrityError);
+        return false;
+    }
+
+    m_recoveryState = QStringLiteral("restored");
+    m_recoveryMessage = QStringLiteral(
+        "The damaged profile was restored from %1. The damaged database was "
+        "preserved at %2. Cause: %3")
+                            .arg(backupPath, quarantinePath, failureMessage);
+    qWarning().noquote() << m_recoveryMessage;
+    return true;
+}
+
+bool ProfileDatabase::initializeSchema()
+{
+    if (!execute(QStringLiteral("PRAGMA foreign_keys = ON"))
+        || !execute(QStringLiteral("PRAGMA journal_mode = WAL"))
+        || !execute(QStringLiteral("PRAGMA synchronous = NORMAL"))) {
+        return false;
+    }
+
+    bool versionRead = false;
+    const int storedVersion = storedSchemaVersion(&versionRead);
+    if (!versionRead) {
+        return false;
+    }
     if (storedVersion > schemaVersion) {
         setLastError(QStringLiteral("The profile database version is newer than this application."));
+        return false;
+    }
+    if (storedVersion > 0 && storedVersion < schemaVersion
+        && !createMigrationBackup(storedVersion)) {
+        return false;
+    }
+    if (!createSchema()) {
         return false;
     }
 
@@ -268,23 +566,173 @@ bool ProfileDatabase::initializeSchema()
         }
     }
 
-    QSqlQuery update(m_database);
-    update.prepare(QStringLiteral(
-        "INSERT OR REPLACE INTO schema_meta(key, value) VALUES('version', :version)"));
-    update.bindValue(QStringLiteral(":version"), schemaVersion);
-    if (!update.exec()) {
-        setLastError(update.lastError().text());
-        if (migrationTransaction) {
-            m_database.rollback();
+    if (storedVersion != schemaVersion) {
+        QSqlQuery update(m_database);
+        update.prepare(QStringLiteral(
+            "INSERT OR REPLACE INTO schema_meta(key, value) VALUES('version', :version)"));
+        update.bindValue(QStringLiteral(":version"), schemaVersion);
+        if (!update.exec()) {
+            setLastError(update.lastError().text());
+            if (migrationTransaction) {
+                m_database.rollback();
+            }
+            return false;
         }
-        return false;
     }
     if (migrationTransaction && !m_database.commit()) {
         setLastError(m_database.lastError().text());
         m_database.rollback();
         return false;
     }
+    QString integrityError;
+    if (!validateIntegrity(&integrityError)) {
+        setLastError(integrityError);
+        return false;
+    }
     return true;
+}
+
+int ProfileDatabase::storedSchemaVersion(bool *ok) const
+{
+    QSqlQuery tableQuery(m_database);
+    tableQuery.prepare(QStringLiteral(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'schema_meta'"));
+    if (!tableQuery.exec()) {
+        setLastError(tableQuery.lastError().text());
+        if (ok) {
+            *ok = false;
+        }
+        return 0;
+    }
+    if (!tableQuery.next()) {
+        if (ok) {
+            *ok = true;
+        }
+        return 0;
+    }
+
+    QSqlQuery versionQuery(m_database);
+    versionQuery.prepare(QStringLiteral(
+        "SELECT value FROM schema_meta WHERE key = 'version'"));
+    if (!versionQuery.exec()) {
+        setLastError(versionQuery.lastError().text());
+        if (ok) {
+            *ok = false;
+        }
+        return 0;
+    }
+    if (!versionQuery.next()) {
+        if (ok) {
+            *ok = true;
+        }
+        return 0;
+    }
+
+    bool converted = false;
+    const int version = versionQuery.value(0).toString().toInt(&converted);
+    if (!converted || version < 0) {
+        setLastError(QStringLiteral("The profile database has an invalid schema version."));
+        if (ok) {
+            *ok = false;
+        }
+        return 0;
+    }
+    if (ok) {
+        *ok = true;
+    }
+    return version;
+}
+
+bool ProfileDatabase::createSnapshot(const QString &destinationPath,
+                                     QString *errorMessage) const
+{
+    if (!m_database.isOpen()) {
+        if (errorMessage) {
+            *errorMessage = m_database.lastError().text();
+        }
+        return false;
+    }
+
+    const QString temporaryPath = destinationPath + QStringLiteral(".tmp-")
+                                  + QUuid::createUuid().toString(QUuid::WithoutBraces);
+    QFile::remove(temporaryPath);
+
+    QSqlQuery checkpoint(m_database);
+    if (!checkpoint.exec(QStringLiteral("PRAGMA wal_checkpoint(FULL)"))) {
+        if (errorMessage) {
+            *errorMessage = checkpoint.lastError().text();
+        }
+        return false;
+    }
+    checkpoint.finish();
+
+    QSqlQuery snapshot(m_database);
+    if (!snapshot.exec(QStringLiteral("VACUUM INTO '%1'")
+                           .arg(quotedSqlitePath(temporaryPath)))) {
+        if (errorMessage) {
+            *errorMessage = snapshot.lastError().text();
+        }
+        QFile::remove(temporaryPath);
+        return false;
+    }
+
+    QString validationError;
+    if (!sqliteFileIsValid(temporaryPath, &validationError)) {
+        if (errorMessage) {
+            *errorMessage = validationError;
+        }
+        QFile::remove(temporaryPath);
+        return false;
+    }
+
+    const QString previousPath = destinationPath + QStringLiteral(".previous");
+    QFile::remove(previousPath);
+    const bool hadPrevious = QFileInfo::exists(destinationPath);
+    if (hadPrevious && !QFile::rename(destinationPath, previousPath)) {
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("Could not rotate the previous profile backup.");
+        }
+        QFile::remove(temporaryPath);
+        return false;
+    }
+    if (!QFile::rename(temporaryPath, destinationPath)) {
+        if (hadPrevious) {
+            QFile::rename(previousPath, destinationPath);
+        }
+        if (errorMessage) {
+            *errorMessage = QStringLiteral("Could not activate the new profile backup.");
+        }
+        QFile::remove(temporaryPath);
+        return false;
+    }
+    QFile::remove(previousPath);
+    if (errorMessage) {
+        errorMessage->clear();
+    }
+    return true;
+}
+
+bool ProfileDatabase::createMigrationBackup(int sourceVersion)
+{
+    m_latestMigrationBackupPath = migrationBackupPath(m_filePath, sourceVersion);
+    QString backupError;
+    if (!createSnapshot(m_latestMigrationBackupPath, &backupError)) {
+        setLastError(QStringLiteral("Could not back up the profile before migration: %1")
+                         .arg(backupError));
+        return false;
+    }
+    qInfo().noquote() << "Created profile migration backup at"
+                      << m_latestMigrationBackupPath;
+    return true;
+}
+
+qint64 ProfileDatabase::totalChangeCount() const
+{
+    QSqlQuery query(m_database);
+    if (!query.exec(QStringLiteral("SELECT total_changes()")) || !query.next()) {
+        return -1;
+    }
+    return query.value(0).toLongLong();
 }
 
 bool ProfileDatabase::createSchema()
@@ -1468,7 +1916,31 @@ bool ProfileDatabase::removeAnnotation(const QUrl &documentUrl,
 
 void ProfileDatabase::sync()
 {
-    execute(QStringLiteral("PRAGMA wal_checkpoint(PASSIVE)"));
+    if (!m_database.isOpen()) {
+        return;
+    }
+
+    QSqlQuery checkpoint(m_database);
+    if (!checkpoint.exec(QStringLiteral("PRAGMA wal_checkpoint(FULL)"))) {
+        qWarning().noquote() << "Could not checkpoint the profile database:"
+                             << checkpoint.lastError().text();
+        return;
+    }
+    checkpoint.finish();
+
+    const qint64 changeCount = totalChangeCount();
+    const QString backupPath = recoveryBackupPath(m_filePath);
+    if (changeCount == m_lastSnapshotChangeCount && QFileInfo::exists(backupPath)) {
+        return;
+    }
+
+    QString backupError;
+    if (!createSnapshot(backupPath, &backupError)) {
+        qWarning().noquote() << "Could not update the automatic profile backup:"
+                             << backupError;
+        return;
+    }
+    m_lastSnapshotChangeCount = changeCount;
 }
 
 bool ProfileDatabase::execute(const QString &statement) const

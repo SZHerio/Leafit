@@ -18,6 +18,7 @@ ApplicationWindow {
     required property var librarySearchModel
     required property var oneDriveLibraryService
     required property var desktopIntegration
+    required property var diagnosticService
 
     property bool showingLibrary: true
     property bool focusMode: false
@@ -189,6 +190,20 @@ ApplicationWindow {
         root.desktopIntegration.saveWindowState()
     }
 
+    Component.onCompleted: {
+        if (root.localStateStore.profileRecoveryState === "restored") {
+            root.showProfileNotice(
+                        qsTr("Profile recovered"),
+                        qsTr("The damaged local profile was restored from the latest automatic backup."),
+                        "success")
+        } else if (root.localStateStore.profileRecoveryState === "reset") {
+            root.showProfileNotice(
+                        qsTr("Profile reset for safety"),
+                        qsTr("The damaged database was preserved for diagnostics. You can restore a .szhbackup profile from settings."),
+                        "error")
+        }
+    }
+
     Binding {
         target: Theme
         property: "colorTheme"
@@ -344,6 +359,14 @@ ApplicationWindow {
     }
 
     Connections {
+        target: root.diagnosticService
+
+        function onOperationFailed(errorMessage) {
+            root.showProfileNotice(qsTr("Diagnostics"), errorMessage, "error")
+        }
+    }
+
+    Connections {
         target: root.oneDriveLibraryService
 
         function onProfileApplied() {
@@ -411,6 +434,7 @@ ApplicationWindow {
         readerWorkspace: readerWorkspace
         settingsStore: root.localStateStore
         localizationController: root.localizationController
+        diagnosticService: root.diagnosticService
         darkMode: root.localStateStore.darkMode
         showingLibrary: root.showingLibrary
         visible: !root.focusMode

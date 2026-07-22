@@ -9,6 +9,7 @@ Rectangle {
     required property var readerWorkspace
     required property var settingsStore
     required property var localizationController
+    required property var diagnosticService
     property bool darkMode: false
     property bool showingLibrary: false
     readonly property bool compactMode: width < 1080
@@ -337,6 +338,7 @@ Rectangle {
         y: root.height + Theme.spaceXs
         settingsStore: root.settingsStore
         localizationController: root.localizationController
+        diagnosticService: root.diagnosticService
         readerWorkspace: root.readerWorkspace
         textSettingsAvailable: root.readerWorkspace.showingText
         onBackupRequested: root.backupProfileRequested()
