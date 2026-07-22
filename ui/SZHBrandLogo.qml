@@ -14,7 +14,7 @@ Item {
 
     Image {
         anchors.fill: parent
-        source: "../assets/branding/szhbooks-logo-sheet.png"
+        source: "../assets/branding/szhbooks-logo-sheet-transparent.png"
         sourceClipRect: root.iconOnly
                         ? Qt.rect(127, root.darkVariant ? 595 : 102, 389, 355)
                         : Qt.rect(125, root.darkVariant ? 593 : 100, 1295, 359)

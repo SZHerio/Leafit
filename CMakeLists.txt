@@ -165,7 +165,7 @@ qt_add_qml_module(appSZHBooks
         ui/Theme.qml
     RESOURCES
         assets/branding/szhbooks-icon.png
-        assets/branding/szhbooks-logo-sheet.png
+        assets/branding/szhbooks-logo-sheet-transparent.png
 )
 
 qt_add_translations(appSZHBooks
